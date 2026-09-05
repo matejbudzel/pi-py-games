@@ -79,6 +79,33 @@ class HoldInputRenderingTests(unittest.TestCase):
         self._compare_hold_frames({15: [("press", "left")], 90: [("release", "left")]},
                                   (Note(1, "left", 3, is_lift=True), Note(1, "right", 30, is_lift=True)))
 
+    def test_tail_strip_matches_original_dots(self) -> None:
+        colors = ((255, 75, 125), (255, 160, 65), (255, 225, 70), (80, 225, 130), (55, 225, 255), (175, 110, 255))
+        expected = self.app.screen.copy()
+        actual = expected.copy()
+        clip = pygame.Rect(0, views.HEADER_HEIGHT, 854, 480 - views.HEADER_HEIGHT)
+        expected.set_clip(clip)
+        actual.set_clip(clip)
+        # Include short tails, every colour phase, long offscreen tails,
+        # fractional positions and the receptor clamp for active holds.
+        for end in (1.01, 3, 30):
+            note = Note(1, "left", end)
+            for active in (False, True):
+                for time in (0, 0.125, 0.5, 0.75, 1, 1.125, end - 0.01, end):
+                    expected.fill((23, 34, 45))
+                    actual.fill((23, 34, 45))
+                    rectangle = views._hold_rectangle(note, time, active)
+                    tail_y = 132 + (end - time) * 182
+                    first = max(0, int((tail_y - 480 - 8) // 12))
+                    for index in range(first, first + 40):
+                        y = round(tail_y - index * 12)
+                        if y < rectangle.top:
+                            break
+                        pygame.draw.circle(expected, colors[index % 6], (rectangle.centerx, y), 4)
+                    views._render_hold_tail(actual, self.app.assets.hold_tail, rectangle, tail_y)
+                    self.assertEqual(pygame.image.tobytes(actual, "RGB"), pygame.image.tobytes(expected, "RGB"),
+                                     (end, active, time))
+
     def _compare_hold_frames(self, actions: dict[int, list[tuple[str, str]]], notes: tuple[Note, ...] | None = None) -> None:
         song = Song("Example", Path("."), (255, 100, 150), Path("song.wav"),
                     Path("chart.sm"), fallback_cover_path(), 30)

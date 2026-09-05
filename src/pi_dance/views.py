@@ -223,15 +223,9 @@ def _render_flowing_notes(screen: pygame.Surface, assets: Assets, session: Sessi
     screen.set_clip(pygame.Rect(0, HEADER_HEIGHT, APP_WIDTH, APP_HEIGHT - HEADER_HEIGHT))
     for note, active in _visible_holds(session, song_seconds):
         rectangle = _hold_rectangle(note, song_seconds, active)
-        colors = ((255, 75, 125), (255, 160, 65), (255, 225, 70), (80, 225, 130), (55, 225, 255), (175, 110, 255))
         # Anchor dots to the tail so they travel with the chart, not the screen.
         tail_y = 132 + (note.end_timestamp - song_seconds) * (APP_HEIGHT + 16 - 132) / NOTE_TRAVEL_SECONDS
-        first = max(0, int((tail_y - APP_HEIGHT - 8) // 12))
-        for index in range(first, first + 40):
-            y = round(tail_y - index * 12)
-            if y < rectangle.top:
-                break
-            pygame.draw.circle(screen, colors[index % len(colors)], (rectangle.centerx, y), 4)
+        _render_hold_tail(screen, assets.hold_tail, rectangle, tail_y)
         if active:
             arrow = assets.flow_arrows[note.direction]
             screen.blit(arrow, arrow.get_rect(center=(rectangle.centerx, 132)))
@@ -255,6 +249,19 @@ def _render_flowing_notes(screen: pygame.Surface, assets: Assets, session: Sessi
     if not has_visible_note and not session.active_holds:
         _render_next_note_marker(screen, session, song_seconds)
     screen.set_clip(previous_clip)
+
+
+def _render_hold_tail(screen: pygame.Surface, strip: pygame.Surface, rectangle: pygame.Rect, tail_y: float) -> None:
+    first = max(0, int((tail_y - APP_HEIGHT - 8) // 12))
+    first_y = round(tail_y - first * 12)
+    count = max(0, min(40, (first_y - rectangle.top) // 12 + 1))
+    if count == 0:
+        return
+    height = (count - 1) * 12 + 8
+    # Select the rainbow phase without changing the tail's dot spacing.
+    bottom = strip.get_height() - (first % 6) * 12
+    screen.blit(strip, (rectangle.centerx - 4, first_y + 4 - height),
+                pygame.Rect(0, bottom - height, 8, height))
 
 
 def _render_next_note_marker(screen: pygame.Surface, session: Session, song_seconds: float, next_note: Note | None = None) -> None:

@@ -23,6 +23,7 @@ class Assets:
         self.rainbow_title = self._make_rainbow_title()
         self.receptors = self._load_rotated("arrow.png")
         self.flow_arrows = self._load_rotated("arrow-flow.png")
+        self.hold_tail = self._make_hold_tail(canvas)
         self.receptor_glows = {direction: pygame.transform.scale(arrow, (42, 42)) for direction, arrow in self.flow_arrows.items()}
         self.feedback_icons = self._load_feedback_icons()
         self.feedback_patches = self._make_feedback_patches(canvas)
@@ -41,6 +42,17 @@ class Assets:
 
     def cover_for(self, song: Song) -> pygame.Surface:
         return self.covers[song.path]
+
+    @staticmethod
+    def _make_hold_tail(canvas: pygame.Surface) -> pygame.Surface:
+        """Cache 40 visible dots plus one rainbow cycle for scrolling phase."""
+        colors = ((255, 75, 125), (255, 160, 65), (255, 225, 70), (80, 225, 130), (55, 225, 255), (175, 110, 255))
+        strip = pygame.Surface((8, 45 * 12 + 8)).convert(canvas)
+        strip.fill((0, 0, 0))
+        for index in range(46):
+            pygame.draw.circle(strip, colors[index % len(colors)], (4, strip.get_height() - 4 - index * 12), 4)
+        strip.set_colorkey((0, 0, 0))
+        return strip
 
     def _load_rotated(self, filename: str) -> dict[str, pygame.Surface]:
         arrow = pygame.image.load(FONT_PATH.parent.parent / "gameplay" / filename).convert_alpha()
