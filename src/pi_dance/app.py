@@ -196,8 +196,7 @@ class App:
         elif self.current_screen is Screen.SONG_EXIT_CONFIRMATION:
             self._handle_song_exit_action(action)
         elif self.current_screen is Screen.RESULT and action is Action.START:
-            self._stop_song()
-            self.current_screen = Screen.SONG_LIST
+            self._return_to_song_list()
 
     def _handle_select(self) -> None:
         if self.current_screen is Screen.SPLASH:
@@ -207,8 +206,7 @@ class App:
         elif self.current_screen is Screen.SONG_EXIT_CONFIRMATION:
             self._cancel_song_exit()
         elif self.current_screen is Screen.RESULT:
-            self._stop_song()
-            self.current_screen = Screen.SONG_LIST
+            self._return_to_song_list()
         elif self.current_screen in (Screen.DIFFICULTY, Screen.COUNTDOWN, Screen.PLAYING, Screen.PAUSED):
             self.song_exit_return_screen = self.current_screen
             if self.current_screen is Screen.COUNTDOWN:
@@ -247,8 +245,7 @@ class App:
             self._invalidate_modal_snapshot()
         elif action is Action.START:
             if self.song_exit_confirmation_selected:
-                self._stop_song()
-                self.current_screen = Screen.SONG_LIST
+                self._return_to_song_list()
             else:
                 self._cancel_song_exit()
 
@@ -320,6 +317,19 @@ class App:
     def _invalidate_modal_snapshot(self) -> None:
         self.modal_snapshot = None
         self.gameplay_needs_full_restore = True
+
+    def _return_to_song_list(self) -> None:
+        selected_path = self.songs[self.selected].path if self.selected < len(self.songs) else None
+        self._stop_song()
+        self.songs = discover_songs(SONG_DIRECTORY)
+        self.assets.reload_covers(self.songs, self.screen)
+        self.selected = next(
+            (index for index, song in enumerate(self.songs) if song.path == selected_path),
+            min(self.selected, max(0, len(self.songs) - 1)),
+        )
+        self.first_visible_row = 0
+        self._scroll_selection_into_view()
+        self.current_screen = Screen.SONG_LIST
 
     def _stop_song(self) -> None:
         pygame.mixer.music.stop()

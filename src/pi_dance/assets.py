@@ -25,6 +25,9 @@ class Assets:
         self.feedback_icons = self._load_feedback_icons()
         self.feedback_patches = self._make_feedback_patches(canvas)
         self.draft_star, self.earned_star = self._load_result_stars()
+        self.reload_covers(songs, canvas)
+
+    def reload_covers(self, songs: list[Song], canvas: pygame.Surface) -> None:
         self.covers = {
             song.path: pygame.transform.scale(pygame.image.load(song.cover_path).convert(canvas), (256, 256))
             for song in songs
