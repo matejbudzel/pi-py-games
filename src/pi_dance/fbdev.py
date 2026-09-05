@@ -84,7 +84,7 @@ class FbdevPresenter:
             self._surface.fill((0, 0, 0))
             self._copy_rectangles(self._surface, [pygame.Rect(0, 0, variable.xres, variable.yres)])
         except BaseException:
-            os.close(self._descriptor)
+            self.close()
             raise
 
     def present(self, canvas: pygame.Surface, rectangles: list[pygame.Rect] | None = None) -> None:
@@ -109,6 +109,7 @@ class FbdevPresenter:
     def close(self) -> None:
         if hasattr(self, "_map"):
             self._map.close()
+            del self._map
         if hasattr(self, "_descriptor"):
             os.close(self._descriptor)
             del self._descriptor

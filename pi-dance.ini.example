@@ -1,5 +1,7 @@
 [game]
 title = Tancuj, tancuj, vykrúcaj!
+# Persistent rotating tracebacks and connection events (three 1 MB files).
+error_log = ~/.local/state/pi-dance/errors.log
 
 [songs]
 directory = songs
@@ -8,6 +10,8 @@ directory = songs
 # Use fbdev on the Pi 1's legacy /dev/fb0 setup; leave pygame on desktop.
 backend = pygame
 framebuffer = /dev/fb0
+# Optional TV standby detection; requires cec-client and TV HDMI-CEC support.
+cec = false
 
 [exit]
 item_title = Koniec

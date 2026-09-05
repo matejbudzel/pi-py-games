@@ -104,6 +104,17 @@ class Session:
         self._refresh_active_holds(song_time)
         return feedback
 
+    def clear_pressed(self, song_time: float) -> None:
+        """Preserve held time on disconnect without inventing a lift release."""
+        for note in self.pending:
+            started_at = self._pressed_since.get(note.direction)
+            if started_at is not None and note.end_timestamp is not None:
+                overlap = self._overlap(note, started_at, song_time)
+                if overlap:
+                    self._hold_progress.setdefault(note, HoldProgress()).held_seconds += overlap
+        self._pressed_since.clear()
+        self.active_holds.clear()
+
     @staticmethod
     def _edge_credit(error: float) -> float:
         return 1.0 if abs(error) <= GREAT_WINDOW_SECONDS else 0.5 if abs(error) <= OK_WINDOW_SECONDS else 0.0

@@ -24,6 +24,8 @@ class Settings:
     timing_offset_ms: int
     display_backend: str
     framebuffer_device: Path
+    display_cec: bool
+    error_log: Path
 
 
 def load_settings(config_path: Path = Path("pi-dance.ini")) -> Settings:
@@ -50,6 +52,8 @@ def load_settings(config_path: Path = Path("pi-dance.ini")) -> Settings:
         timing_offset_ms=parser.getint("gameplay", "timing_offset_ms", fallback=0),
         display_backend=parser.get("display", "backend", fallback="pygame").strip().lower() or "pygame",
         framebuffer_device=Path(parser.get("display", "framebuffer", fallback="/dev/fb0").strip() or "/dev/fb0"),
+        display_cec=parser.getboolean("display", "cec", fallback=False),
+        error_log=Path(parser.get("game", "error_log", fallback="~/.local/state/pi-dance/errors.log")).expanduser(),
     )
 
 

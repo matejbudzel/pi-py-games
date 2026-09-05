@@ -416,6 +416,64 @@ If the pad does not respond, quit the game after pressing a few pad buttons and
 inspect `cat /tmp/pi-dance-input.txt`. It reports every joystick considered,
 permission/recognition failures, and received mapped button presses.
 
+## Disconnects and error recovery
+
+Unplugging a dance pad automatically pauses a song or its countdown. The legacy
+framebuffer reader closes the disconnected device and retries discovery every
+two seconds; the desktop backend uses Pygame hotplug events. Reconnecting never
+resumes automatically: press START to continue. Keyboard play still works without
+a pad. Disconnecting also clears held panels so they cannot remain stuck.
+
+HDMI monitoring uses Linux DRM connector status when available, or [`tvservice -s`](https://github.com/raspberrypi/userland/blob/master/host_applications/linux/apps/tvservice/tvservice.c)
+on the Pi's legacy framebuffer setup. Checks run in a background worker, two
+seconds apart, with bounded command timeouts. A detected loss pauses the song;
+START can resume after a detected reconnection. The framebuffer is reopened on
+reconnection and presentation is suspended while the display is known to be off.
+Menus and results remain in their current state.
+
+A TV can keep HDMI connected in standby. The reference Pi setup also uses
+`hdmi_force_hotplug=1`, so HDMI status alone is not reliable TV power detection.
+For a TV with HDMI-CEC enabled, install `cec-utils` and enable the optional check:
+
+```ini
+[display]
+cec = true
+```
+
+This uses `cec-client -s -d 1` with [`pow 0`](https://github.com/Pulse-Eight/libcec/blob/master/src/cec-client/cec-client.cpp) to query the TV's power status; it does
+not send power or source-selection commands. An explicit standby response pauses
+play even if HDMI remains connected. Timeouts and unknown responses are not
+treated as disconnects. CEC support, permissions, and standby reporting need to
+be verified on the actual TV/Pi. Detection can take several seconds. Desktop
+systems without a supported status source simply keep working without HDMI
+monitoring; an initially unused desktop HDMI socket does not pause keyboard play.
+
+Unexpected Python exceptions in input, update, rendering, or presentation are
+logged with a traceback, and the game attempts to stop playback and rebuild the
+song list. If recovery fails, it closes resources and restarts the application at
+the list, reopening display, audio, and input. Startup failures are retried too,
+with delays increasing from one to 30 seconds to avoid a tight restart loop.
+Normal exit and Ctrl+C stop the application. Corrupt or disappearing external
+covers use the fallback image instead of preventing the list from opening.
+
+Logs include connection events and failed song loads. The default is
+`~/.local/state/pi-dance/errors.log`, with two rotated backups and a 1 MB limit
+per file. Override it with `[game] error_log = /path/to/errors.log`. If that path
+cannot be opened, logging falls back to `/tmp/pi-dance-errors.log`, then stderr.
+Files in `/tmp` may disappear on reboot.
+
+This boundary recovers Python exceptions, not native SDL/driver crashes, an OS
+out-of-memory kill, power loss, or a hung native call. Those require an external
+process supervisor, which is not installed by the game.
+
+### Hardware validation
+
+On the Pi, try unplugging/replugging the pad during a song, countdown, and exit
+confirmation, then turn the TV off/on and unplug/replug HDMI. Check that play
+stays paused until START, the pad works after reconnection, and the display draws
+again. Inspect the error log for connection events and tracebacks. Run the same
+song with keyboard input and no pad to check that keyboard-only play still works.
+
 ## Font
 
 The included `Sweet16mono` is a pixel-perfect 8×16 bitmap-style font by Martin

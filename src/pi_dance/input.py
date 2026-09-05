@@ -43,6 +43,13 @@ class Release:
     action: Action
 
 
+class DeviceEvent(Enum):
+    PAD_CONNECTED = auto()
+    PAD_DISCONNECTED = auto()
+    DISPLAY_CONNECTED = auto()
+    DISPLAY_DISCONNECTED = auto()
+
+
 PAD_ACTIONS = {0: Action.LEFT, 1: Action.DOWN, 2: Action.UP, 3: Action.RIGHT, 8: Action.START, 9: Action.SELECT}
 DIRECTIONS = {Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN}
 

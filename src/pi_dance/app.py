@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from enum import Enum, auto
+import logging
 from pathlib import Path
 
 import pygame
@@ -14,7 +15,9 @@ from .config import APP_HEIGHT, APP_WIDTH, BACKGROUND, SETTINGS, SONG_DIRECTORY,
 from .gameplay import JudgedNote, Judgement, Session
 from .fbdev import FbdevPresenter
 from .console_input import ConsoleInput
-from .input import Action, Release, actions_from_event
+from .input import Action, DeviceEvent, Release, actions_from_event
+from .joystick_input import JoystickInput
+from .display_monitor import DisplayMonitor
 from .performance import FrameTiming, PerformanceTracker
 from .songs import Song, discover_songs
 from . import views
@@ -55,12 +58,17 @@ DEBUG_RESULT_STARS = {
 
 class App:
     def __init__(self) -> None:
+        try:
+            self._initialize()
+        except BaseException:
+            self.close()
+            raise
+
+    def _initialize(self) -> None:
         pygame.mixer.pre_init(MIXER_FREQUENCY, -16, 2, MIXER_BUFFER_SAMPLES)
         pygame.init()
         pygame.display.set_caption(WINDOW_TITLE)
-        self.joysticks = [pygame.joystick.Joystick(index) for index in range(pygame.joystick.get_count())] if SETTINGS.display_backend == "pygame" else []
-        for joystick in self.joysticks:
-            joystick.init()
+        self.joystick_input = JoystickInput() if SETTINGS.display_backend == "pygame" else None
         if SETTINGS.display_backend == "fbdev":
             pygame.display.set_mode((1, 1))
             self.framebuffer = self._open_framebuffer_presenter()
@@ -68,6 +76,9 @@ class App:
         else:
             self.screen = pygame.display.set_mode((APP_WIDTH, APP_HEIGHT))
             self.framebuffer = None
+        self.display_monitor = DisplayMonitor(legacy=self.framebuffer is not None, cec=SETTINGS.display_cec)
+        self.display_connected: bool | None = None
+        self.paused_from = Screen.PLAYING
         self.clock = pygame.time.Clock()
         self.running = True
         self.current_screen = Screen.SPLASH
@@ -106,37 +117,70 @@ class App:
         try:
             with console_input or nullcontext():
                 self.console_input = console_input
+                self.display_monitor.start()
+                recovering = False
                 while self.running:
-                    frame_started = pygame.time.get_ticks()
-                    self._handle_events()
-                    input_finished = pygame.time.get_ticks()
-                    self._update()
-                    update_finished = pygame.time.get_ticks()
-                    self._render()
-                    render_finished = pygame.time.get_ticks()
-                    if self.framebuffer is not None:
-                        self.framebuffer.present(self.screen, self._dirty_rectangles())
-                    else:
-                        pygame.display.flip()
-                    present_finished = pygame.time.get_ticks()
-                    self.clock.tick(TARGET_FPS)
-                    frame_finished = pygame.time.get_ticks()
-                    self.performance.record(
-                        FrameTiming(
-                            input_ms=input_finished - frame_started,
-                            update_ms=update_finished - input_finished,
-                            render_ms=render_finished - update_finished,
-                            present_ms=present_finished - render_finished,
-                            work_ms=present_finished - frame_started,
-                            frame_ms=frame_finished - frame_started,
-                        )
-                    )
+                    try:
+                        self._run_frame()
+                        recovering = False
+                    except Exception:
+                        logging.getLogger(__name__).exception("Frame failed in %s", self.current_screen.name)
+                        if recovering or (SETTINGS.display_backend == "fbdev" and self.framebuffer is None):
+                            raise
+                        recovering = True
+                        self._return_to_song_list()
+                        self._last_visual_signature = None
         finally:
-            self.performance.write_report(Path("/tmp/last-pi-dance-run.txt"))
-            pygame.mixer.music.stop()
+            self.close()
+
+    def close(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
+        cleanups = []
+        if hasattr(self, "display_monitor"):
+            cleanups.append(self.display_monitor.close)
+        if hasattr(self, "performance"):
+            cleanups.append(lambda: self.performance.write_report(Path("/tmp/last-pi-dance-run.txt")))
+        if pygame.mixer.get_init():
+            cleanups.append(pygame.mixer.music.stop)
+        if getattr(self, "framebuffer", None) is not None:
+            cleanups.append(self.framebuffer.close)
+        cleanups.append(pygame.quit)
+        for cleanup in cleanups:
+            try:
+                cleanup()
+            except Exception:
+                logging.getLogger(__name__).exception("Application cleanup failed")
+
+    def _run_frame(self) -> None:
+        frame_started = pygame.time.get_ticks()
+        self._handle_events()
+        if not self.running:
+            return
+        input_finished = pygame.time.get_ticks()
+        self._update()
+        update_finished = pygame.time.get_ticks()
+        self._render()
+        render_finished = pygame.time.get_ticks()
+        if self.display_connected is not False:
             if self.framebuffer is not None:
-                self.framebuffer.close()
-            pygame.quit()
+                self.framebuffer.present(self.screen, self._dirty_rectangles())
+            else:
+                pygame.display.flip()
+        present_finished = pygame.time.get_ticks()
+        self.clock.tick(TARGET_FPS)
+        frame_finished = pygame.time.get_ticks()
+        self.performance.record(
+            FrameTiming(
+                input_ms=input_finished - frame_started,
+                update_ms=update_finished - input_finished,
+                render_ms=render_finished - update_finished,
+                present_ms=present_finished - render_finished,
+                work_ms=present_finished - frame_started,
+                frame_ms=frame_finished - frame_started,
+            )
+        )
 
     @staticmethod
     def _open_framebuffer_presenter() -> FbdevPresenter | None:
@@ -147,15 +191,65 @@ class App:
         raise ValueError(f"unknown display backend: {SETTINGS.display_backend}")
 
     def _handle_events(self) -> None:
+        actions = []
+        device_events = self.display_monitor.poll_events()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
                 continue
-            for action in actions_from_event(event):
-                self._handle_action(action)
+            if self.joystick_input is not None:
+                device_event = self.joystick_input.handle_event(event)
+                if device_event is not None:
+                    device_events.append(device_event)
+            actions.extend(actions_from_event(event))
         if getattr(self, "console_input", None) is not None:
             for action in self.console_input.poll_actions():
-                self._handle_action(action)
+                if isinstance(action, DeviceEvent):
+                    device_events.append(action)
+                else:
+                    actions.append(action)
+        for event in device_events:
+            self._handle_device_event(event)
+        # A queued START must not immediately undo an automatic pause.
+        if any(event in (DeviceEvent.PAD_DISCONNECTED, DeviceEvent.DISPLAY_DISCONNECTED) for event in device_events):
+            return
+        if device_events and self.current_screen is Screen.PAUSED:
+            return
+        for action in actions:
+            self._handle_action(action)
+
+    def _handle_device_event(self, event: DeviceEvent) -> None:
+        logging.getLogger(__name__).info("Hardware: %s", event.name)
+        if event is DeviceEvent.DISPLAY_CONNECTED:
+            if self.display_connected is False and self.framebuffer is not None:
+                self.framebuffer.close()
+                self.framebuffer = None
+                self.framebuffer = self._open_framebuffer_presenter()
+                self.screen = self.framebuffer.canvas
+                self.gameplay_base = None
+            self.display_connected = True
+            self._last_visual_signature = None
+            self._invalidate_modal_snapshot()
+        elif event is DeviceEvent.DISPLAY_DISCONNECTED:
+            self.display_connected = False
+        if event in (DeviceEvent.PAD_DISCONNECTED, DeviceEvent.DISPLAY_DISCONNECTED):
+            self._pause_song()
+            if event is DeviceEvent.PAD_DISCONNECTED and self.session is not None:
+                self.session.clear_pressed(self._song_position_seconds())
+            if self.current_screen is Screen.SONG_EXIT_CONFIRMATION and self.song_exit_return_screen in (Screen.PLAYING, Screen.COUNTDOWN):
+                self.paused_from = self.song_exit_return_screen
+                self.song_exit_return_screen = Screen.PAUSED
+
+    def _pause_song(self) -> None:
+        if self.current_screen not in (Screen.PLAYING, Screen.COUNTDOWN):
+            return
+        self.paused_from = self.current_screen
+        if self.current_screen is Screen.COUNTDOWN:
+            self.countdown_remaining_on_modal = self._countdown_remaining()
+        else:
+            pygame.mixer.music.pause()
+        self.current_screen = Screen.PAUSED
+        self._invalidate_modal_snapshot()
 
     def _handle_action(self, action: Action | Release) -> None:
         if isinstance(action, Release):
@@ -184,14 +278,17 @@ class App:
         elif self.current_screen is Screen.EXIT_CONFIRMATION:
             self._handle_application_exit_action(action)
         elif self.current_screen is Screen.PLAYING and action is Action.START:
-            pygame.mixer.music.pause()
-            self.current_screen = Screen.PAUSED
-            self._invalidate_modal_snapshot()
+            self._pause_song()
         elif self.current_screen in (Screen.COUNTDOWN, Screen.PLAYING) and action in ACTION_DIRECTIONS:
             self._handle_direction(ACTION_DIRECTIONS[action])
         elif self.current_screen is Screen.PAUSED and action is Action.START:
-            pygame.mixer.music.unpause()
-            self.current_screen = Screen.PLAYING
+            if self.display_connected is False:
+                return
+            if self.paused_from is Screen.COUNTDOWN:
+                self.countdown_started_at = pygame.time.get_ticks() - (COUNTDOWN_SECONDS - self.countdown_remaining_on_modal) * 1000
+            else:
+                pygame.mixer.music.unpause()
+            self.current_screen = self.paused_from
             self._invalidate_modal_snapshot()
         elif self.current_screen is Screen.SONG_EXIT_CONFIRMATION:
             self._handle_song_exit_action(action)
@@ -265,6 +362,7 @@ class App:
                 return
             pygame.mixer.music.load(str(song.audio_path))
         except (OSError, pygame.error, ValueError):
+            logging.getLogger(__name__).exception("Cannot prepare song %s", song.path)
             return
         self.active_song = song
         self.available_charts = charts
@@ -291,6 +389,8 @@ class App:
         self.current_screen = Screen.COUNTDOWN
 
     def _update(self) -> None:
+        if self.display_connected is False:
+            self._pause_song()
         if self.current_screen is Screen.COUNTDOWN and self._countdown_remaining() <= 0:
             pygame.mixer.music.play()
             self.playback_started = True
@@ -444,7 +544,7 @@ class App:
         return self._audio_position_seconds() + SETTINGS.timing_offset_ms / 1000
 
     def _audio_position_seconds(self) -> float:
-        return 0.0 if self.current_screen is Screen.COUNTDOWN else max(0, pygame.mixer.music.get_pos()) / 1000
+        return 0.0 if not self.playback_started else max(0, pygame.mixer.music.get_pos()) / 1000
 
     def _show_feedback(self, judgement: Judgement) -> None:
         self.feedback = judgement

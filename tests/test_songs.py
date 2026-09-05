@@ -26,6 +26,18 @@ class SongDiscoveryTests(unittest.TestCase):
         self.assertNotEqual(color, focus_color_for_title("Shake It Off"))
         self.assertGreaterEqual(max(color), 230)
 
+    def test_invalid_durations_do_not_break_discovery(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_song(root, "valid", "Valid")
+            for index, duration in enumerate(("invalid", "NaN", "Infinity", -1)):
+                self._write_song(root, str(index), "Broken")
+                path = root / str(index) / "song.json"
+                metadata = json.loads(path.read_text())
+                metadata["duration_seconds"] = duration
+                path.write_text(json.dumps(metadata))
+            self.assertEqual([song.title for song in discover_songs(root)], ["Valid"])
+
     def test_legacy_difficulty_fields_are_ignored(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)

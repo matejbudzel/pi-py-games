@@ -5,6 +5,7 @@ from __future__ import annotations
 import colorsys
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,11 +52,11 @@ def discover_songs(song_directory: Path) -> list[Song]:
             chart = metadata["chart"]
             cover = metadata.get("cover", "song.bmp")
             duration_seconds = float(metadata["duration_seconds"])
-        except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError):
             continue
         if not isinstance(title, str) or not title.strip():
             continue
-        if not isinstance(audio, str) or not isinstance(chart, str) or not isinstance(cover, str) or duration_seconds <= 0:
+        if not isinstance(audio, str) or not isinstance(chart, str) or not isinstance(cover, str) or not math.isfinite(duration_seconds) or duration_seconds <= 0:
             continue
         if not (bundle / audio).is_file() or not (bundle / chart).is_file():
             continue

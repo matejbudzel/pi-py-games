@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import glob
+import logging
 import os
 import select
 import struct
@@ -13,7 +14,7 @@ import time
 import tty
 from pathlib import Path
 
-from .input import Action, DIRECTIONS, PAD_ACTIONS, Release
+from .input import Action, DeviceEvent, DIRECTIONS, PAD_ACTIONS, Release
 
 
 KDSETMODE = 0x4B3A
@@ -57,18 +58,20 @@ class ConsoleInput:
         if not os.isatty(self._keyboard_fd):
             raise RuntimeError("fbdev display requires an interactive Linux console")
         self._terminal_settings = termios.tcgetattr(self._keyboard_fd)
-        tty.setraw(self._keyboard_fd)
-        self._pending = b""
-        self._pending_since = 0.0
-        self._joysticks, self._input_status = self._open_joysticks()
+        self._joysticks = []
+        self._input_status = []
         self._button_events: list[str] = []
-        self._next_joystick_retry = time.monotonic() + 2.0
-        self._write_input_status()
         try:
+            tty.setraw(self._keyboard_fd)
+            self._pending = b""
+            self._pending_since = 0.0
+            self._joysticks, self._input_status = self._open_joysticks()
+            self._next_joystick_retry = time.monotonic() + 2.0
+            self._write_input_status()
             fcntl.ioctl(sys.stdout.fileno(), KDSETMODE, KD_GRAPHICS)
-        except OSError:
-            self._restore_terminal()
-            raise RuntimeError("fbdev display requires a Linux virtual terminal")
+        except BaseException:
+            self.__exit__()
+            raise
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -76,31 +79,50 @@ class ConsoleInput:
             fcntl.ioctl(sys.stdout.fileno(), KDSETMODE, KD_TEXT)
         except OSError:
             pass
-        self._restore_terminal()
-        for descriptor in self._joysticks:
-            os.close(descriptor)
-        self._joysticks = []
-        self._write_input_status()
-        sys.stdout.write("\x1bc")
-        sys.stdout.flush()
+        try:
+            self._restore_terminal()
+        finally:
+            for descriptor in self._joysticks:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+            self._joysticks = []
+            self._write_input_status()
+            sys.stdout.write("\x1bc")
+            sys.stdout.flush()
 
-    def poll_actions(self) -> list[Action | Release]:
-        actions: list[Action | Release] = list(self._read_keyboard_actions())
+    def poll_actions(self) -> list[Action | Release | DeviceEvent]:
+        actions: list[Action | Release | DeviceEvent] = list(self._read_keyboard_actions())
         if not self._joysticks and time.monotonic() >= self._next_joystick_retry:
             self._joysticks, self._input_status = self._open_joysticks()
             self._next_joystick_retry = time.monotonic() + 2.0
             self._write_input_status()
-        for descriptor in self._joysticks:
+            if self._joysticks:
+                actions.append(DeviceEvent.PAD_CONNECTED)
+        for descriptor in list(self._joysticks):
             try:
                 data = os.read(descriptor, JS_EVENT.size * 32)
             except BlockingIOError:
                 continue
+            except OSError:
+                logging.getLogger(__name__).info("Dance pad disconnected", exc_info=True)
+                data = b""
+            if not data:
+                os.close(descriptor)
+                self._joysticks.remove(descriptor)
+                actions.append(DeviceEvent.PAD_DISCONNECTED)
+                self._input_status.append("Dance pad disconnected; waiting for reconnection.")
+                self._write_input_status()
+                continue
             for offset in range(0, len(data) - JS_EVENT.size + 1, JS_EVENT.size):
                 _, value, event_type, button = JS_EVENT.unpack_from(data, offset)
-                if event_type & 0x7F == 1 and button in PAD_ACTIONS:
+                # Initial state packets on reconnect must not press START.
+                if event_type == 1 and button in PAD_ACTIONS:
                     action = PAD_ACTIONS[button]
                     if value == 1:
                         self._button_events.append(f"button {button} -> {action.name}")
+                        self._button_events = self._button_events[-30:]
                         actions.append(action)
                     elif action in DIRECTIONS:
                         actions.append(Release(action))
@@ -113,6 +135,8 @@ class ConsoleInput:
             self._pending += os.read(self._keyboard_fd, 32)
         actions: list[Action] = []
         while self._pending:
+            if self._pending.startswith(b"\x03"):
+                raise KeyboardInterrupt
             sequence = next((item for item in MULTIBYTE_SEQUENCES if self._pending.startswith(item)), None)
             if sequence is not None:
                 actions.append(KEY_SEQUENCES[sequence])

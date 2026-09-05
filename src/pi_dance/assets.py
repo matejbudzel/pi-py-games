@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 import pygame
 
 from .config import BACKGROUND, FONT_PATH, FOREGROUND, TITLE
 from .gameplay import Judgement
-from .songs import Song
+from .songs import Song, fallback_cover_path
 
 
 class Assets:
@@ -28,10 +30,14 @@ class Assets:
         self.reload_covers(songs, canvas)
 
     def reload_covers(self, songs: list[Song], canvas: pygame.Surface) -> None:
-        self.covers = {
-            song.path: pygame.transform.scale(pygame.image.load(song.cover_path).convert(canvas), (256, 256))
-            for song in songs
-        }
+        self.covers = {}
+        for song in songs:
+            try:
+                cover = pygame.image.load(song.cover_path)
+            except (OSError, pygame.error):
+                logging.getLogger(__name__).warning("Cannot load cover %s", song.cover_path, exc_info=True)
+                cover = pygame.image.load(fallback_cover_path())
+            self.covers[song.path] = pygame.transform.scale(cover.convert(canvas), (256, 256))
 
     def cover_for(self, song: Song) -> pygame.Surface:
         return self.covers[song.path]
