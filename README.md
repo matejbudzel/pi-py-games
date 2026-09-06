@@ -192,6 +192,16 @@ page and ZIP again. Existing source files and metadata still remain intact.
 Preparation checks for a usable `dance-single` chart without storing difficulty
 or meter in metadata. Legacy metadata containing those fields remains compatible;
 the game ignores them.
+
+To inspect a library, print an alphabetical inventory of its songs, folders, and
+all files in each bundle:
+
+```bash
+python3 scripts/list_songs.py ~/pi-dance-songs
+```
+
+Omit the directory to inspect `songs/` in the current working directory. Bundles
+without valid metadata are included and marked so incomplete imports are visible.
 The game reads all difficulties from the `.sm` file. Songs with multiple charts
 open a stacked-bar selector in the gameplay screen, ordered from Beginner through
 Challenge/Edit (then by meter within each difficulty), with the easiest focused.
