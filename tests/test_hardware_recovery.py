@@ -205,18 +205,31 @@ class AppRecoveryTests(unittest.TestCase):
         render.assert_not_called()
 
     def test_explicit_quit_is_not_restarted(self):
-        with patch('pi_dance.main.configure_logging'), patch('pi_dance.main.App') as factory:
-            main()
+        factory = Mock()
+        with patch('pi_dance.main.configure_logging'), patch('pi_dance.main._application_types', return_value=(factory, Mock())):
+            main([])
             factory.assert_called_once()
             factory.return_value.run.assert_called_once()
 
+    def test_launcher_mode_shows_splash_and_sinks_output(self):
+        factory = Mock()
+        with patch('pi_dance.main._show_launcher_splash') as splash, \
+             patch('pi_dance.main._sink_terminal_output') as sink, \
+             patch('pi_dance.main.configure_logging'), \
+             patch('pi_dance.main._application_types', return_value=(factory, Mock())):
+            main(['--from-rpi-launcher'])
+        splash.assert_called_once()
+        sink.assert_called_once()
+        factory.return_value.run.assert_called_once()
+
     def test_supervisor_restarts_at_list_and_backs_off(self):
         recovered = Mock()
-        with patch('pi_dance.main.configure_logging'), patch('pi_dance.main.App', side_effect=[RuntimeError('init failed'), RuntimeError('still absent'), recovered]), patch('pi_dance.main.time.sleep') as sleep:
+        screen = Mock()
+        with patch('pi_dance.main.configure_logging'), patch('pi_dance.main._application_types', return_value=(Mock(side_effect=[RuntimeError('init failed'), RuntimeError('still absent'), recovered]), screen)), patch('pi_dance.main.time.sleep') as sleep:
             with self.assertLogs('pi_dance.main', level='ERROR'):
-                main()
+                main([])
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
-        self.assertIs(recovered.current_screen, Screen.SONG_LIST)
+        self.assertIs(recovered.current_screen, screen.SONG_LIST)
 
     def test_partial_initialization_failure_closes_framebuffer(self):
         framebuffer = Mock()

@@ -378,6 +378,16 @@ Start the game from the project directory so it reads that local configuration:
 .venv/bin/pi-dance
 ```
 
+When the Raspberry Pi LTUI launcher starts the game, use its launcher mode:
+
+```bash
+.venv/bin/pi-dance --from-rpi-launcher
+```
+
+It immediately replaces the terminal with a static `[ ... spúšťam ... ]` screen,
+then suppresses the game's standard output and error output until the game takes
+over the display. Normal launches keep their existing terminal behavior.
+
 Press F8 at any time to show or hide the developer performance overlay.
 It displays the most recent frame's input (`i`), update (`u`), render (`r`),
 and presentation (`p`) time in milliseconds. When the application exits, its
