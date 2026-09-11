@@ -4,6 +4,10 @@
 backend=pygame
 framebuffer=/dev/fb0
 
+[diagnostics]
+# All games write bounded tracebacks and hardware events here.
+error_log=~/.local/state/pi-py-games/errors.log
+
 [pi-dance]
 # Relative paths resolve beside this file.
 config=config/dance.ini

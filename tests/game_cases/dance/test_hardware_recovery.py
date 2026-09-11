@@ -261,7 +261,7 @@ class AppRecoveryTests(unittest.TestCase):
 
 class ErrorLoggingTests(unittest.TestCase):
     def test_traceback_is_written_and_log_size_is_bounded(self):
-        logger = logging.getLogger('pi_dance')
+        logger = logging.getLogger()
         handlers, level, propagate = logger.handlers[:], logger.level, logger.propagate
         logger.handlers = []
         try:
@@ -271,7 +271,7 @@ class ErrorLoggingTests(unittest.TestCase):
                 try:
                     raise ValueError('inspect this failure')
                 except ValueError:
-                    logger.exception('Recovery')
+                    logging.getLogger('games.dance').exception('Recovery')
                 contents = path.read_text()
                 self.assertIn('Traceback (most recent call last)', contents)
                 self.assertIn('ValueError: inspect this failure', contents)

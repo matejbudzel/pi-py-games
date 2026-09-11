@@ -505,10 +505,11 @@ with delays increasing from one to 30 seconds to avoid a tight restart loop.
 Normal exit and Ctrl+C stop the application. Corrupt or disappearing external
 covers use the fallback image instead of preventing the list from opening.
 
-Logs include connection events and failed song loads. The default is
-`~/.local/state/pi-dance/errors.log`, with two rotated backups and a 1 MB limit
-per file. Override it with `[game] error_log = /path/to/errors.log`. If that path
-cannot be opened, logging falls back to `/tmp/pi-dance-errors.log`, then stderr.
+Logs include connection events and failed song loads. Every game launched through
+the provider shares `~/.local/state/pi-py-games/errors.log`, with two rotated
+backups and a 1 MB limit per file. Override it centrally with
+`[diagnostics] error_log = /path/to/errors.log` in `pi-py-games.ini`. If that path
+cannot be opened, logging falls back to `/tmp/pi-py-games-errors.log`, then stderr.
 Files in `/tmp` may disappear on reboot.
 
 This boundary recovers Python exceptions, not native SDL/driver crashes, an OS

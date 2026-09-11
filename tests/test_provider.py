@@ -25,7 +25,8 @@ class ProviderTests(unittest.TestCase):
             config.write_text("[display]\nbackend=fbdev\nframebuffer=/dev/fb1\n", encoding="utf-8")
             with patch("pi_py_games.provider.subprocess.call", return_value=0) as call:
                 self.assertEqual(provider.run("pi-dance", config), 0)
-        self.assertEqual(call.call_args.args[0][1:], ["-m", "games.dance.main"])
+        self.assertEqual(call.call_args.args[0][1:], ["-m", "pi_py_games.runner", "pi-dance", "games.dance.main"])
         self.assertEqual(call.call_args.kwargs["env"]["PI_DANCE_CONFIG"], str(config.parent / "config/dance.ini"))
         self.assertEqual(call.call_args.kwargs["env"]["PI_PY_GAMES_DISPLAY_BACKEND"], "fbdev")
         self.assertEqual(call.call_args.kwargs["env"]["PI_PY_GAMES_FRAMEBUFFER"], "/dev/fb1")
+        self.assertEqual(call.call_args.kwargs["env"]["PI_PY_GAMES_ERROR_LOG"], str(Path("~/.local/state/pi-py-games/errors.log").expanduser()))

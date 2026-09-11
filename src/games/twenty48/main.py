@@ -9,6 +9,7 @@ import pygame
 
 from common.console_input import ConsoleInput
 from common.display import GameDisplay, display_settings, initialize_pygame
+from common.error_logging import configure_logging
 from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
 from .game import Board, SIZE, TileMotion
@@ -97,6 +98,7 @@ def _draw(screen: pygame.Surface, board: Board, font: pygame.font.Font, animatio
 
 
 def main() -> None:
+    configure_logging()
     platform_display = display_settings()
     initialize_pygame(platform_display)
     if platform_display.backend == "pygame":

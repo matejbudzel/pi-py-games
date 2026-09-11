@@ -28,7 +28,6 @@ class Settings:
     display_backend: str
     framebuffer_device: Path
     display_cec: bool
-    error_log: Path
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
@@ -62,7 +61,6 @@ def load_settings(config_path: Path | None = None) -> Settings:
         display_backend=platform_display.backend,
         framebuffer_device=platform_display.framebuffer,
         display_cec=parser.getboolean("display", "cec", fallback=False),
-        error_log=Path(parser.get("game", "error_log", fallback="~/.local/state/pi-dance/errors.log")).expanduser(),
     )
 
 

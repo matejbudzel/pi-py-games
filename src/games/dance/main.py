@@ -12,7 +12,7 @@ def _application_types():
 
 
 def main(argv: list[str] | None = None) -> None:
-    configure_logging(SETTINGS.error_log)
+    configure_logging()
     app_type, screen_type = _application_types()
     restarting = False
     retry_delay = 1

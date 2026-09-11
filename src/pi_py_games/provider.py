@@ -32,6 +32,13 @@ def _display_environment(path: Path) -> dict[str, str]:
     }
 
 
+def _logging_environment(path: Path) -> dict[str, str]:
+    parser = ConfigParser(interpolation=None)
+    parser.read(path, encoding="utf-8")
+    value = parser.get("diagnostics", "error_log", fallback="~/.local/state/pi-py-games/errors.log").strip()
+    return {"PI_PY_GAMES_ERROR_LOG": str(Path(value).expanduser())}
+
+
 def manifest(config_path: Path | None = None) -> dict:
     """Return only launcher-contract fields; game details stay in its package."""
     return {
@@ -51,9 +58,10 @@ def run(game_id: str, config_path: Path) -> int:
     # The child is the game process: after launch, it owns its direct Pygame,
     # framebuffer, audio and physical input resources.
     _, _, module, environment_key, default_config = game
-    return subprocess.call([sys.executable, "-m", module], env={
+    return subprocess.call([sys.executable, "-m", "pi_py_games.runner", game_id, module], env={
         **__import__("os").environ,
         **_display_environment(config_path),
+        **_logging_environment(config_path),
         environment_key: str(_settings(config_path, game_id, default_config)),
     })
 
