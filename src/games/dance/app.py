@@ -81,8 +81,10 @@ class App:
         self.clock = pygame.time.Clock()
         self.running = True
         self.current_screen = Screen.SPLASH
-        self.songs: list[Song] = discover_songs(SONG_DIRECTORY)
-        self.assets = Assets(self.songs, self.screen)
+        self.songs: list[Song] = []
+        self.assets = Assets([], self.screen)
+        self._library_loaded = False
+        self._first_frame_presented = False
         self.selected = 0
         self.first_visible_row = 0
         self.exit_confirmation_selected = False
@@ -164,6 +166,7 @@ class App:
         render_finished = pygame.time.get_ticks()
         if self.display_connected is not False:
             self.display.present(self._dirty_rectangles())
+        self._first_frame_presented = True
         present_finished = pygame.time.get_ticks()
         self.clock.tick(TARGET_FPS)
         frame_finished = pygame.time.get_ticks()
@@ -187,21 +190,22 @@ class App:
     def _handle_events(self) -> None:
         actions = []
         device_events = self.display_monitor.poll_events()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-                continue
-            if self.joystick_input is not None:
-                device_event = self.joystick_input.handle_event(event)
-                if device_event is not None:
-                    device_events.append(device_event)
-            actions.extend(actions_from_event(event))
         if getattr(self, "console_input", None) is not None:
             for action in self.console_input.poll_actions():
                 if isinstance(action, DeviceEvent):
                     device_events.append(action)
                 else:
                     actions.append(action)
+        else:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    continue
+                if self.joystick_input is not None:
+                    device_event = self.joystick_input.handle_event(event)
+                    if device_event is not None:
+                        device_events.append(device_event)
+                actions.extend(actions_from_event(event))
         for event in device_events:
             self._handle_device_event(event)
         # A queued START must not immediately undo an automatic pause.
@@ -385,6 +389,8 @@ class App:
         self.current_screen = Screen.COUNTDOWN
 
     def _update(self) -> None:
+        if self._first_frame_presented and not self._library_loaded:
+            self._load_song_library()
         if self.display_connected is False:
             self._pause_song()
         if self.current_screen is Screen.COUNTDOWN and self._countdown_remaining() <= 0:
@@ -401,6 +407,11 @@ class App:
                 self.result_stars = self.session.stars()
                 self.result_started_at = pygame.time.get_ticks()
                 self.current_screen = Screen.RESULT
+
+    def _load_song_library(self) -> None:
+        self.songs = discover_songs(SONG_DIRECTORY)
+        self.assets.reload_covers(self.songs, self.screen)
+        self._library_loaded = True
 
     def _cancel_song_exit(self) -> None:
         if self.song_exit_return_screen is Screen.COUNTDOWN:
