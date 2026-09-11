@@ -11,6 +11,11 @@ Included games are **pi-dance**, the original small DDR-style rhythm game, and *
 Install the project so the `pi-py-games` and `pi-dance` commands are on `PATH`, then copy `pi-py-games.ini.example` to ignored `pi-py-games.ini`:
 
 ```ini
+[display]
+# pygame on desktops; fbdev uses an off-screen SDL canvas and /dev/fb0 on Pi 1.
+backend=pygame
+framebuffer=/dev/fb0
+
 [pi-dance]
 config=/path/to/config/dance.ini
 
@@ -439,8 +444,8 @@ SDL2 display driver. Test its direct presenter with:
 .venv/bin/python src/games/dance/scripts/pygame_display_smoke.py --fbdev /dev/fb0
 ```
 
-If the grid appears, add this to the device-local `config/dance.ini` before
-launching the game:
+If the grid appears, set the shared provider display backend in the
+device-local `pi-py-games.ini` before launching either game:
 
 ```ini
 [display]

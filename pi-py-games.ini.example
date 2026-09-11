@@ -1,4 +1,9 @@
 # Host-local provider configuration. Copy to pi-py-games.ini.
+[display]
+# pygame on desktops; fbdev uses an off-screen SDL canvas and /dev/fb0 on Pi 1.
+backend=pygame
+framebuffer=/dev/fb0
+
 [pi-dance]
 # Relative paths resolve beside this file.
 config=config/dance.ini

@@ -23,6 +23,15 @@ def _settings(path: Path, section: str, default: str) -> Path:
     return game_config if game_config.is_absolute() else path.parent / game_config
 
 
+def _display_environment(path: Path) -> dict[str, str]:
+    parser = ConfigParser(interpolation=None)
+    parser.read(path, encoding="utf-8")
+    return {
+        "PI_PY_GAMES_DISPLAY_BACKEND": parser.get("display", "backend", fallback="pygame").strip().lower() or "pygame",
+        "PI_PY_GAMES_FRAMEBUFFER": parser.get("display", "framebuffer", fallback="/dev/fb0").strip() or "/dev/fb0",
+    }
+
+
 def manifest(config_path: Path | None = None) -> dict:
     """Return only launcher-contract fields; game details stay in its package."""
     return {
@@ -42,7 +51,11 @@ def run(game_id: str, config_path: Path) -> int:
     # The child is the game process: after launch, it owns its direct Pygame,
     # framebuffer, audio and physical input resources.
     _, _, module, environment_key, default_config = game
-    return subprocess.call([sys.executable, "-m", module], env={**__import__("os").environ, environment_key: str(_settings(config_path, game_id, default_config))})
+    return subprocess.call([sys.executable, "-m", module], env={
+        **__import__("os").environ,
+        **_display_environment(config_path),
+        environment_key: str(_settings(config_path, game_id, default_config)),
+    })
 
 
 def main(argv=None) -> int:

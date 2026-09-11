@@ -13,6 +13,7 @@ from .assets import Assets
 from .charts import Chart, difficulty_key, load_sm
 from .config import APP_HEIGHT, APP_WIDTH, BACKGROUND, SETTINGS, SONG_DIRECTORY, TARGET_FPS, WINDOW_TITLE
 from .gameplay import JudgedNote, Judgement, Session
+from common.display import DisplaySettings, GameDisplay, prepare_pygame_display
 from common.fbdev import FbdevPresenter
 from common.console_input import ConsoleInput
 from common.input import Action, DeviceEvent, Release, actions_from_event
@@ -66,16 +67,14 @@ class App:
 
     def _initialize(self) -> None:
         pygame.mixer.pre_init(MIXER_FREQUENCY, -16, 2, MIXER_BUFFER_SAMPLES)
+        self.display_settings = DisplaySettings(SETTINGS.display_backend, SETTINGS.framebuffer_device)
+        prepare_pygame_display(self.display_settings)
         pygame.init()
         pygame.display.set_caption(WINDOW_TITLE)
         self.joystick_input = JoystickInput() if SETTINGS.display_backend == "pygame" else None
-        if SETTINGS.display_backend == "fbdev":
-            pygame.display.set_mode((1, 1))
-            self.framebuffer = self._open_framebuffer_presenter()
-            self.screen = self.framebuffer.canvas
-        else:
-            self.screen = pygame.display.set_mode((APP_WIDTH, APP_HEIGHT))
-            self.framebuffer = None
+        self.display = GameDisplay(self.display_settings, (APP_WIDTH, APP_HEIGHT), self._open_framebuffer_presenter)
+        self.screen = self.display.canvas
+        self.framebuffer = self.display.framebuffer
         self.display_monitor = DisplayMonitor(legacy=self.framebuffer is not None, cec=SETTINGS.display_cec)
         self.display_connected: bool | None = None
         self.paused_from = Screen.PLAYING
@@ -144,8 +143,8 @@ class App:
             cleanups.append(lambda: self.performance.write_report(Path("/tmp/last-pi-dance-run.txt")))
         if pygame.mixer.get_init():
             cleanups.append(pygame.mixer.music.stop)
-        if getattr(self, "framebuffer", None) is not None:
-            cleanups.append(self.framebuffer.close)
+        if hasattr(self, "display"):
+            cleanups.append(self.display.close)
         cleanups.append(pygame.quit)
         for cleanup in cleanups:
             try:
@@ -164,10 +163,7 @@ class App:
         self._render()
         render_finished = pygame.time.get_ticks()
         if self.display_connected is not False:
-            if self.framebuffer is not None:
-                self.framebuffer.present(self.screen, self._dirty_rectangles())
-            else:
-                pygame.display.flip()
+            self.display.present(self._dirty_rectangles())
         present_finished = pygame.time.get_ticks()
         self.clock.tick(TARGET_FPS)
         frame_finished = pygame.time.get_ticks()
@@ -183,11 +179,9 @@ class App:
         )
 
     @staticmethod
-    def _open_framebuffer_presenter() -> FbdevPresenter | None:
-        if SETTINGS.display_backend == "pygame":
-            return None
+    def _open_framebuffer_presenter(path: Path | None = None, canvas_size: tuple[int, int] | None = None) -> FbdevPresenter:
         if SETTINGS.display_backend == "fbdev":
-            return FbdevPresenter(SETTINGS.framebuffer_device, (APP_WIDTH, APP_HEIGHT))
+            return FbdevPresenter(path or SETTINGS.framebuffer_device, canvas_size or (APP_WIDTH, APP_HEIGHT))
         raise ValueError(f"unknown display backend: {SETTINGS.display_backend}")
 
     def _handle_events(self) -> None:
@@ -222,10 +216,12 @@ class App:
         logging.getLogger(__name__).info("Hardware: %s", event.name)
         if event is DeviceEvent.DISPLAY_CONNECTED:
             if self.display_connected is False and self.framebuffer is not None:
-                self.framebuffer.close()
+                self.display.close()
                 self.framebuffer = None
-                self.framebuffer = self._open_framebuffer_presenter()
-                self.screen = self.framebuffer.canvas
+                self.display_settings = DisplaySettings(SETTINGS.display_backend, SETTINGS.framebuffer_device)
+                self.display = GameDisplay(self.display_settings, (APP_WIDTH, APP_HEIGHT), self._open_framebuffer_presenter)
+                self.framebuffer = self.display.framebuffer
+                self.screen = self.display.canvas
                 self.gameplay_base = None
             self.display_connected = True
             self._last_visual_signature = None

@@ -1,5 +1,6 @@
 import json
 import unittest
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,7 +20,12 @@ class ProviderTests(unittest.TestCase):
             provider.run("not-a-game", Path("pi-py-games.ini"))
 
     def test_run_passes_game_specific_config_to_child(self):
-        with patch("pi_py_games.provider.subprocess.call", return_value=0) as call:
-            self.assertEqual(provider.run("pi-dance", Path("/tmp/provider.ini")), 0)
+        with TemporaryDirectory() as directory:
+            config = Path(directory) / "provider.ini"
+            config.write_text("[display]\nbackend=fbdev\nframebuffer=/dev/fb1\n", encoding="utf-8")
+            with patch("pi_py_games.provider.subprocess.call", return_value=0) as call:
+                self.assertEqual(provider.run("pi-dance", config), 0)
         self.assertEqual(call.call_args.args[0][1:], ["-m", "games.dance.main"])
-        self.assertEqual(call.call_args.kwargs["env"]["PI_DANCE_CONFIG"], "/tmp/config/dance.ini")
+        self.assertEqual(call.call_args.kwargs["env"]["PI_DANCE_CONFIG"], str(config.parent / "config/dance.ini"))
+        self.assertEqual(call.call_args.kwargs["env"]["PI_PY_GAMES_DISPLAY_BACKEND"], "fbdev")
+        self.assertEqual(call.call_args.kwargs["env"]["PI_PY_GAMES_FRAMEBUFFER"], "/dev/fb1")

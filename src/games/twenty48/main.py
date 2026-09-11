@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pygame
 
+from common.console_input import ConsoleInput
+from common.display import GameDisplay, display_settings, prepare_pygame_display
 from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
 from .game import Board, SIZE
@@ -41,34 +43,53 @@ def _draw(screen: pygame.Surface, board: Board, font: pygame.font.Font) -> None:
 
 
 def main() -> None:
+    platform_display = display_settings()
+    prepare_pygame_display(platform_display)
     pygame.init()
     pygame.display.set_caption("2048")
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    display = GameDisplay(platform_display, (WIDTH, HEIGHT))
+    screen = display.canvas
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 17)
-    joystick = JoystickInput()
+    joystick = JoystickInput() if platform_display.backend == "pygame" else None
+    console_input = ConsoleInput() if platform_display.backend == "fbdev" else None
     board = Board.new()
     running = True
     directions = {Action.LEFT: "left", Action.RIGHT: "right", Action.UP: "up", Action.DOWN: "down"}
     try:
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    continue
-                joystick.handle_event(event)
-                for action in actions_from_event(event):
+        with console_input or _NullContext():
+            while running:
+                actions = []
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                        continue
+                    if joystick is not None:
+                        joystick.handle_event(event)
+                    actions.extend(actions_from_event(event))
+                if console_input is not None:
+                    actions.extend(action for action in console_input.poll_actions() if isinstance(action, Action))
+                for action in actions:
                     if action is Action.SELECT:
                         running = False
                     elif action is Action.START:
                         board = Board.new()
                     elif action in directions and not board.game_over:
                         board.move(directions[action])
-            _draw(screen, board, font)
-            pygame.display.flip()
-            clock.tick(FPS)
+                _draw(screen, board, font)
+                display.present()
+                clock.tick(FPS)
     finally:
+        display.close()
         pygame.quit()
+
+
+class _NullContext:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *unused):
+        return False
 
 
 if __name__ == "__main__":
