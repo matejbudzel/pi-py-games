@@ -17,9 +17,6 @@ from pathlib import Path
 from .input import Action, DeviceEvent, DIRECTIONS, PAD_ACTIONS, Release
 
 
-KDSETMODE = 0x4B3A
-KD_TEXT = 0x00
-KD_GRAPHICS = 0x01
 JS_EVENT = struct.Struct("IhBB")
 JSIOCGNAME = 0x80806A13
 JSIOCGAXES = 0x80016A11
@@ -69,17 +66,12 @@ class ConsoleInput:
             self._joysticks, self._input_status = self._open_joysticks()
             self._next_joystick_retry = time.monotonic() + 2.0
             self._write_input_status()
-            fcntl.ioctl(sys.stdout.fileno(), KDSETMODE, KD_GRAPHICS)
         except BaseException:
             self.__exit__()
             raise
         return self
 
     def __exit__(self, *_: object) -> None:
-        try:
-            fcntl.ioctl(sys.stdout.fileno(), KDSETMODE, KD_TEXT)
-        except OSError:
-            pass
         try:
             self._restore_terminal()
         finally:
