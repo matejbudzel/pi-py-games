@@ -52,24 +52,34 @@ class GameDisplay:
         settings: DisplaySettings,
         canvas_size: tuple[int, int],
         presenter_factory: Callable[[Path, tuple[int, int]], FbdevPresenter] = FbdevPresenter,
+        *,
+        logical_size: tuple[int, int] | None = None,
     ) -> None:
         self.settings = settings
         self.canvas_size = canvas_size
+        self.logical_size = logical_size or canvas_size
         self._presenter_factory = presenter_factory
         self.framebuffer: FbdevPresenter | None = None
+        self._output: pygame.Surface
         self.canvas: pygame.Surface
         self._open()
 
     def _open(self) -> None:
         if self.settings.backend == "fbdev":
             self.framebuffer = self._presenter_factory(self.settings.framebuffer, self.canvas_size)
-            self.canvas = self.framebuffer.canvas
+            self._output = self.framebuffer.canvas
         else:
-            self.canvas = pygame.display.set_mode(self.canvas_size)
+            self._output = pygame.display.set_mode(self.canvas_size)
+        self.canvas = self._output if self.logical_size == self.canvas_size else pygame.Surface(self.logical_size)
 
     def present(self, rectangles: list[pygame.Rect] | None = None) -> None:
+        if self.canvas is not self._output:
+            # pygame.transform.scale is deliberately nearest-neighbour.  Keeping
+            # this here gives SDL and direct-fbdev games identical pixels.
+            pygame.transform.scale(self.canvas, self.canvas_size, self._output)
+            rectangles = None
         if self.framebuffer is not None:
-            self.framebuffer.present(self.canvas, rectangles)
+            self.framebuffer.present(self._output, rectangles)
         else:
             pygame.display.flip()
 

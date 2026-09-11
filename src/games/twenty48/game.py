@@ -27,10 +27,22 @@ def _collapse(line: list[int]) -> tuple[list[int], int]:
 
 
 @dataclass
+class TileMotion:
+    """A tile's pre-spawn movement, expressed in board coordinates."""
+
+    source: tuple[int, int]
+    destination: tuple[int, int]
+    value: int
+    merged: bool = False
+
+
+@dataclass
 class Board:
     cells: list[list[int]] = field(default_factory=lambda: [[0] * SIZE for _ in range(SIZE)])
     score: int = 0
     random_source: random.Random = field(default_factory=random.Random, repr=False)
+    last_moves: list[TileMotion] = field(default_factory=list, init=False, repr=False)
+    last_spawn: tuple[int, int] | None = field(default=None, init=False, repr=False)
 
     @classmethod
     def new(cls, random_source: random.Random | None = None) -> "Board":
@@ -45,28 +57,31 @@ class Board:
             return False
         row, column = self.random_source.choice(empty)
         self.cells[row][column] = 4 if self.random_source.random() < 0.1 else 2
+        self.last_spawn = (row, column)
         return True
 
     def move(self, direction: str) -> bool:
         before = [row[:] for row in self.cells]
         gained = 0
+        self.last_moves = []
+        self.last_spawn = None
         for index in range(SIZE):
-            if direction == "left":
-                line, points = _collapse(self.cells[index])
-                self.cells[index] = line
-            elif direction == "right":
-                line, points = _collapse(list(reversed(self.cells[index])))
-                self.cells[index] = list(reversed(line))
-            elif direction == "up":
-                line, points = _collapse([self.cells[row][index] for row in range(SIZE)])
-                for row, value in enumerate(line):
-                    self.cells[row][index] = value
-            elif direction == "down":
-                line, points = _collapse([self.cells[row][index] for row in reversed(range(SIZE))])
-                for row, value in zip(reversed(range(SIZE)), line):
-                    self.cells[row][index] = value
-            else:
+            if direction not in ("left", "right", "up", "down"):
                 raise ValueError("unknown direction: %s" % direction)
+            if direction == "left":
+                coordinates = [(index, column) for column in range(SIZE)]
+            elif direction == "right":
+                coordinates = [(index, column) for column in reversed(range(SIZE))]
+            elif direction == "up":
+                coordinates = [(row, index) for row in range(SIZE)]
+            else:
+                coordinates = [(row, index) for row in reversed(range(SIZE))]
+            values, points, motions = _collapse_with_motions(
+                [(coordinate, before[coordinate[0]][coordinate[1]]) for coordinate in coordinates]
+            )
+            for coordinate, value in zip(coordinates, values):
+                self.cells[coordinate[0]][coordinate[1]] = value
+            self.last_moves.extend(motions)
             gained += points
         changed = self.cells != before
         if changed:
@@ -87,3 +102,30 @@ class Board:
             for row in range(SIZE)
             for column in range(SIZE - 1)
         )
+
+
+def _collapse_with_motions(
+    line: list[tuple[tuple[int, int], int]],
+) -> tuple[list[int], int, list[TileMotion]]:
+    """Collapse a line while retaining enough information for the view to animate it."""
+    values = [(coordinate, value) for coordinate, value in line if value]
+    collapsed: list[int] = []
+    motions: list[TileMotion] = []
+    gained = 0
+    index = 0
+    while index < len(values):
+        source, value = values[index]
+        destination = line[len(collapsed)][0]
+        if index + 1 < len(values) and value == values[index + 1][1]:
+            collapsed.append(value * 2)
+            gained += value * 2
+            motions.extend((
+                TileMotion(source, destination, value, merged=True),
+                TileMotion(values[index + 1][0], destination, value, merged=True),
+            ))
+            index += 2
+        else:
+            collapsed.append(value)
+            motions.append(TileMotion(source, destination, value))
+            index += 1
+    return collapsed + [0] * (SIZE - len(collapsed)), gained, motions
