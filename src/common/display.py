@@ -70,7 +70,17 @@ class GameDisplay:
             self._output = self.framebuffer.canvas
         else:
             self._output = pygame.display.set_mode(self.canvas_size)
-        self.canvas = self._output if self.logical_size == self.canvas_size else pygame.Surface(self.logical_size)
+        if self.logical_size == self.canvas_size:
+            self.canvas = self._output
+        else:
+            # fbdev's RGB565 canvas cannot be an in-place scale destination for
+            # Pygame's default 32-bit surface.  Match the output format so the
+            # scaler can write directly to it on both desktop and Pi.
+            self.canvas = pygame.Surface(
+                self.logical_size,
+                depth=self._output.get_bitsize(),
+                masks=self._output.get_masks(),
+            )
 
     def present(self, rectangles: list[pygame.Rect] | None = None) -> None:
         if self.canvas is not self._output:

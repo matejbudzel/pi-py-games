@@ -47,5 +47,7 @@ class DisplaySettingsTests(unittest.TestCase):
         with patch("common.display.pygame.transform.scale") as scale:
             display.present()
 
+        self.assertEqual(display.canvas.get_bitsize(), presenter.canvas.get_bitsize())
+        self.assertEqual(display.canvas.get_masks(), presenter.canvas.get_masks())
         scale.assert_called_once_with(display.canvas, (854, 480), presenter.canvas)
         presenter.present.assert_called_once_with(presenter.canvas, None)
