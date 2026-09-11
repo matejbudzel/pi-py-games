@@ -173,8 +173,8 @@ only to regenerate every derived file regardless of its current format.
 Prepare downloaded bundles on a desktop machine with ffmpeg installed:
 
 ```bash
-python3 scripts/prepare_songs.py ~/pi-dance-songs --dry-run
-python3 scripts/prepare_songs.py ~/pi-dance-songs
+python3 src/games/dance/scripts/prepare_songs.py ~/pi-dance-songs --dry-run
+python3 src/games/dance/scripts/prepare_songs.py ~/pi-dance-songs
 ```
 
 To download and prepare songs directly from Zenius-I-vanisher, keep a text file
@@ -190,7 +190,7 @@ Run the importer on your desktop with `ffmpeg`, `ffprobe`, and ImageMagick's
 `magick` installed (the same conversion tools used above):
 
 ```bash
-python3 scripts/import_ziv_songs.py ~/pi-dance-simfile-ids.txt ~/pi-dance-songs
+python3 src/games/dance/scripts/import_ziv_songs.py ~/pi-dance-simfile-ids.txt ~/pi-dance-songs
 ```
 
 Point `[songs] directory` in your game configuration to `~/pi-dance-songs`.
@@ -225,7 +225,7 @@ To inspect a library, print an alphabetical inventory of its songs, folders, and
 all files in each bundle:
 
 ```bash
-python3 scripts/list_songs.py ~/pi-dance-songs
+python3 src/games/dance/scripts/list_songs.py ~/pi-dance-songs
 ```
 
 Omit the directory to inspect `songs/` in the current working directory. Bundles
@@ -243,15 +243,15 @@ the source song directory first and an rsync destination second. Either end
 can be remote over SSH; at least one end must be local:
 
 ```bash
-python3 scripts/sync_songs.py ~/pi-dance-songs matej@raspberrypi:/home/matej/pi-dance-songs/ --dry-run
-python3 scripts/sync_songs.py ~/pi-dance-songs matej@raspberrypi:/home/matej/pi-dance-songs/
+python3 src/games/dance/scripts/sync_songs.py ~/pi-dance-songs matej@raspberrypi:/home/matej/pi-dance-songs/ --dry-run
+python3 src/games/dance/scripts/sync_songs.py ~/pi-dance-songs matej@raspberrypi:/home/matej/pi-dance-songs/
 ```
 
 You can also run it on the receiving machine to pull songs from your desktop:
 
 ```bash
-python3 scripts/sync_songs.py matej@devbox:/home/matej/pi-dance-songs ~/pi-dance-songs/ --dry-run
-python3 scripts/sync_songs.py matej@devbox:/home/matej/pi-dance-songs ~/pi-dance-songs/
+python3 src/games/dance/scripts/sync_songs.py matej@devbox:/home/matej/pi-dance-songs ~/pi-dance-songs/ --dry-run
+python3 src/games/dance/scripts/sync_songs.py matej@devbox:/home/matej/pi-dance-songs ~/pi-dance-songs/
 ```
 
 For a remote source, the script runs its metadata scanner over SSH before
@@ -396,8 +396,8 @@ Prepare the downloaded song bundles. The dry run first shows what will be
 created; the second command writes the WAV files, 256×256 covers, and metadata.
 
 ```bash
-.venv/bin/python scripts/prepare_songs.py /path/to/pi-dance-songs --dry-run
-.venv/bin/python scripts/prepare_songs.py /path/to/pi-dance-songs
+.venv/bin/python src/games/dance/scripts/prepare_songs.py /path/to/pi-dance-songs --dry-run
+.venv/bin/python src/games/dance/scripts/prepare_songs.py /path/to/pi-dance-songs
 ```
 
 Start the game from the project directory so it reads that local configuration:
@@ -423,7 +423,7 @@ Before the first Pi launch, verify that the installed SDL2/Pygame display driver
 can draw to the connected screen without loading the game or songs:
 
 ```bash
-.venv/bin/python scripts/pygame_display_smoke.py
+.venv/bin/python src/games/dance/scripts/pygame_display_smoke.py
 ```
 
 It displays a four-colour grid and prints the selected SDL video driver. Press
@@ -435,7 +435,7 @@ The Pi 1 legacy setup managed by `pi-games-launcher` exposes `/dev/fb0` instead 
 SDL2 display driver. Test its direct presenter with:
 
 ```bash
-.venv/bin/python scripts/pygame_display_smoke.py --fbdev /dev/fb0
+.venv/bin/python src/games/dance/scripts/pygame_display_smoke.py --fbdev /dev/fb0
 ```
 
 If the grid appears, add this to the device-local `pi-dance.ini` before

@@ -11,7 +11,7 @@ import wave
 from zipfile import ZipFile
 
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "games" / "dance" / "scripts"))
 import import_ziv_songs as importer
 
 

@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 
-MODULE_PATH = Path(__file__).parents[1] / "scripts" / "prepare_songs.py"
+MODULE_PATH = Path(__file__).parents[1] / "src" / "games" / "dance" / "scripts" / "prepare_songs.py"
 SPEC = spec_from_file_location("prepare_songs", MODULE_PATH)
 assert SPEC and SPEC.loader
 prepare_songs = module_from_spec(SPEC)
