@@ -10,8 +10,8 @@ import sys
 
 MANIFEST_VERSION = 1
 GAMES = (
-    ("pi-dance", "Tancuj, tancuj, vykrúcaj!", "pi-dance", "PI_DANCE_CONFIG", "pi-dance.ini"),
-    ("2048", "2048", "pi-2048", "PI_2048_CONFIG", "pi-2048.ini"),
+    ("pi-dance", "Tancuj, tancuj, vykrúcaj!", "games.dance.main", "PI_DANCE_CONFIG", "pi-dance.ini"),
+    ("2048", "2048", "games.twenty48.main", "PI_2048_CONFIG", "pi-2048.ini"),
 )
 
 
@@ -30,7 +30,7 @@ def manifest(config_path: Path | None = None) -> dict:
         "games": [{
             "id": game_id,
             "title": title,
-            "command": ["pi-py-games", "--config", str(config_path) if config_path else "pi-py-games.ini", "run", game_id],
+            "command": [sys.executable, "-m", "pi_py_games.provider", "--config", str(config_path) if config_path else "pi-py-games.ini", "run", game_id],
         } for game_id, title, _, _, _ in GAMES],
     }
 
@@ -41,8 +41,8 @@ def run(game_id: str, config_path: Path) -> int:
         raise ValueError("unknown game: %s" % game_id)
     # The child is the game process: after launch, it owns its direct Pygame,
     # framebuffer, audio and physical input resources.
-    _, _, command, environment_key, default_config = game
-    return subprocess.call([command], env={**__import__("os").environ, environment_key: str(_settings(config_path, game_id, default_config))})
+    _, _, module, environment_key, default_config = game
+    return subprocess.call([sys.executable, "-m", module], env={**__import__("os").environ, environment_key: str(_settings(config_path, game_id, default_config))})
 
 
 def main(argv=None) -> int:
