@@ -8,7 +8,7 @@ from .assets import Assets
 from .charts import Note
 from .config import APP_HEIGHT, APP_WIDTH, FOREGROUND, SETTINGS
 from .gameplay import Judgement, Session
-from .performance import FrameTiming
+from common.performance import FrameTiming
 from .songs import Song
 
 
