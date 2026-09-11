@@ -12,7 +12,7 @@ Install the project so the `pi-py-games` and `pi-dance` commands are on `PATH`, 
 
 ```ini
 [pi-dance]
-config=/path/to/pi-dance.ini
+config=/path/to/config/dance.ini
 
 [2048]
 # 2048 has no settings yet; this entry may be omitted.
@@ -354,8 +354,8 @@ sudo apt install python3-venv python3-pip ffmpeg imagemagick libsdl2-image-2.0-0
 Clone the repository, create its virtual environment, and install the game:
 
 ```bash
-git clone https://github.com/matejbudzel/pi-dance.git
-cd pi-dance
+git clone https://github.com/matejbudzel/pi-py-games.git
+cd pi-py-games
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e .
@@ -364,10 +364,11 @@ python3 -m venv .venv
 Create the device-local configuration once; it is deliberately ignored by Git:
 
 ```bash
-cp pi-dance.ini.example pi-dance.ini
+mkdir config
+cp src/games/dance/config.example.ini config/dance.ini
 ```
 
-Edit `pi-dance.ini` to localize or brand the title and point the game at the
+Edit `config/dance.ini` to localize or brand the title and point the game at the
 external song directory. For example, use the absolute path where you copied
 the downloaded song folders:
 
@@ -438,7 +439,7 @@ SDL2 display driver. Test its direct presenter with:
 .venv/bin/python src/games/dance/scripts/pygame_display_smoke.py --fbdev /dev/fb0
 ```
 
-If the grid appears, add this to the device-local `pi-dance.ini` before
+If the grid appears, add this to the device-local `config/dance.ini` before
 launching the game:
 
 ```ini

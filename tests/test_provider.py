@@ -22,4 +22,4 @@ class ProviderTests(unittest.TestCase):
         with patch("pi_py_games.provider.subprocess.call", return_value=0) as call:
             self.assertEqual(provider.run("pi-dance", Path("/tmp/provider.ini")), 0)
         self.assertEqual(call.call_args.args[0][1:], ["-m", "games.dance.main"])
-        self.assertEqual(call.call_args.kwargs["env"]["PI_DANCE_CONFIG"], "/tmp/pi-dance.ini")
+        self.assertEqual(call.call_args.kwargs["env"]["PI_DANCE_CONFIG"], "/tmp/config/dance.ini")

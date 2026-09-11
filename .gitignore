@@ -3,5 +3,5 @@
 __pycache__/
 *.py[cod]
 pi-py-games.ini
-pi-dance.ini
+config/*.ini
 .pytest_cache/

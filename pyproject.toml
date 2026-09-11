@@ -21,4 +21,4 @@ pi-py-games = "pi_py_games.provider:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"games.dance" = ["assets/fonts/*.ttf", "assets/fonts/*.txt", "assets/gameplay/*.png", "assets/gameplay/*.bmp"]
+"games.dance" = ["assets/fonts/*.ttf", "assets/fonts/*.txt", "assets/gameplay/*.png", "assets/gameplay/*.bmp", "*.ini"]

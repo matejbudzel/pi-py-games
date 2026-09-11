@@ -32,7 +32,7 @@ class Settings:
 def load_settings(config_path: Path | None = None) -> Settings:
     """Load user-editable settings, falling back to portable defaults."""
     if config_path is None:
-        config_path = Path(os.environ.get("PI_DANCE_CONFIG", "pi-dance.ini")).expanduser()
+        config_path = Path(os.environ.get("PI_DANCE_CONFIG", "config/dance.ini")).expanduser()
     parser = ConfigParser()
     parser.read(config_path, encoding="utf-8")
 

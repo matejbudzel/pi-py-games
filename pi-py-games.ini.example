@@ -1,7 +1,7 @@
 # Host-local provider configuration. Copy to pi-py-games.ini.
 [pi-dance]
 # Relative paths resolve beside this file.
-config=pi-dance.ini
+config=config/dance.ini
 
 [2048]
 # Optional; 2048 currently has no user settings.
