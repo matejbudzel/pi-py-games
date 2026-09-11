@@ -5,7 +5,7 @@ from __future__ import annotations
 import pygame
 
 from common.console_input import ConsoleInput
-from common.display import GameDisplay, display_settings, prepare_pygame_display
+from common.display import GameDisplay, display_settings, initialize_pygame
 from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
 from .game import Board, SIZE
@@ -44,9 +44,9 @@ def _draw(screen: pygame.Surface, board: Board, font: pygame.font.Font) -> None:
 
 def main() -> None:
     platform_display = display_settings()
-    prepare_pygame_display(platform_display)
-    pygame.init()
-    pygame.display.set_caption("2048")
+    initialize_pygame(platform_display)
+    if platform_display.backend == "pygame":
+        pygame.display.set_caption("2048")
     display = GameDisplay(platform_display, (WIDTH, HEIGHT))
     screen = display.canvas
     clock = pygame.time.Clock()

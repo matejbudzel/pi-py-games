@@ -29,10 +29,19 @@ def display_settings(default_backend: str = "pygame", default_framebuffer: Path 
     return DisplaySettings(backend, framebuffer)
 
 
-def prepare_pygame_display(settings: DisplaySettings) -> None:
-    """Select SDL's headless driver before Pygame initializes for fbdev mode."""
-    if settings.backend == "fbdev":
-        os.environ["SDL_VIDEODRIVER"] = "dummy"
+def initialize_pygame(settings: DisplaySettings, audio: bool = False) -> None:
+    """Initialize only the subsystems a direct-fbdev game actually needs.
+
+    SDL2 opens and grabs Linux keyboard event devices during normal video
+    initialization.  fbdev games use the tty and direct joystick reader
+    instead, so they must not call :func:`pygame.init`.
+    """
+    if settings.backend == "pygame":
+        pygame.init()
+        return
+    pygame.font.init()
+    if audio:
+        pygame.mixer.init()
 
 
 class GameDisplay:
@@ -53,7 +62,6 @@ class GameDisplay:
 
     def _open(self) -> None:
         if self.settings.backend == "fbdev":
-            pygame.display.set_mode((1, 1))
             self.framebuffer = self._presenter_factory(self.settings.framebuffer, self.canvas_size)
             self.canvas = self.framebuffer.canvas
         else:

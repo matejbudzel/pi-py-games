@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from common.display import DisplaySettings, GameDisplay, display_settings, prepare_pygame_display
+from common.display import DisplaySettings, GameDisplay, display_settings, initialize_pygame
 
 
 class DisplaySettingsTests(unittest.TestCase):
@@ -16,15 +16,21 @@ class DisplaySettingsTests(unittest.TestCase):
 
         self.assertEqual(settings, DisplaySettings("fbdev", Path("/dev/fb1")))
 
-    def test_fbdev_session_uses_dummy_sdl_and_presents_canvas(self):
+    def test_fbdev_session_does_not_open_an_sdl_window_and_presents_canvas(self):
         presenter = Mock()
         presenter.canvas = Mock()
-        with patch.dict(os.environ, {}, clear=False), patch("common.display.pygame.display.set_mode") as set_mode:
-            prepare_pygame_display(DisplaySettings("fbdev"))
+        with patch("common.display.pygame.display.set_mode") as set_mode:
             display = GameDisplay(DisplaySettings("fbdev"), (320, 240), presenter_factory=Mock(return_value=presenter))
             display.present()
             display.close()
 
-        set_mode.assert_called_once_with((1, 1))
+        set_mode.assert_not_called()
         presenter.present.assert_called_once_with(presenter.canvas, None)
         presenter.close.assert_called_once()
+
+    def test_fbdev_initializes_fonts_without_sdl_video_or_input(self):
+        with patch("common.display.pygame.init") as pygame_init, patch("common.display.pygame.font.init") as font_init:
+            initialize_pygame(DisplaySettings("fbdev"))
+
+        pygame_init.assert_not_called()
+        font_init.assert_called_once()

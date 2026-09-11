@@ -13,7 +13,7 @@ from .assets import Assets
 from .charts import Chart, difficulty_key, load_sm
 from .config import APP_HEIGHT, APP_WIDTH, BACKGROUND, SETTINGS, SONG_DIRECTORY, TARGET_FPS, WINDOW_TITLE
 from .gameplay import JudgedNote, Judgement, Session
-from common.display import DisplaySettings, GameDisplay, prepare_pygame_display
+from common.display import DisplaySettings, GameDisplay, initialize_pygame
 from common.fbdev import FbdevPresenter
 from common.console_input import ConsoleInput
 from common.input import Action, DeviceEvent, Release, actions_from_event
@@ -68,9 +68,9 @@ class App:
     def _initialize(self) -> None:
         pygame.mixer.pre_init(MIXER_FREQUENCY, -16, 2, MIXER_BUFFER_SAMPLES)
         self.display_settings = DisplaySettings(SETTINGS.display_backend, SETTINGS.framebuffer_device)
-        prepare_pygame_display(self.display_settings)
-        pygame.init()
-        pygame.display.set_caption(WINDOW_TITLE)
+        initialize_pygame(self.display_settings, audio=True)
+        if self.display_settings.backend == "pygame":
+            pygame.display.set_caption(WINDOW_TITLE)
         self.joystick_input = JoystickInput() if SETTINGS.display_backend == "pygame" else None
         self.display = GameDisplay(self.display_settings, (APP_WIDTH, APP_HEIGHT), self._open_framebuffer_presenter)
         self.screen = self.display.canvas
