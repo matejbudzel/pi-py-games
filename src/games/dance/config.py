@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 
+from common.assets import SWEET16_FONT_PATH
 from common.display import display_settings
 
 
@@ -68,7 +69,7 @@ SETTINGS = load_settings()
 SONG_DIRECTORY = SETTINGS.song_directory
 
 TITLE = SETTINGS.title
-FONT_PATH = Path(__file__).parent / "assets" / "fonts" / "sweet16mono.ttf"
+FONT_PATH = SWEET16_FONT_PATH
 
 BACKGROUND = (0, 0, 0)
 FOREGROUND = (240, 240, 240)

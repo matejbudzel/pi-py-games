@@ -8,6 +8,7 @@ import math
 import pygame
 
 from common.console_input import ConsoleInput
+from common.assets import SWEET16_FONT_PATH
 from common.display import GameDisplay, display_settings, initialize_pygame
 from common.error_logging import configure_logging
 from common.input import Action, actions_from_event
@@ -106,7 +107,7 @@ def main() -> None:
     display = GameDisplay(platform_display, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT))
     screen = display.canvas
     clock = pygame.time.Clock()
-    font = pygame.font.Font(None, 20)
+    font = pygame.font.Font(SWEET16_FONT_PATH, 16)
     joystick = JoystickInput() if platform_display.backend == "pygame" else None
     console_input = ConsoleInput() if platform_display.backend == "fbdev" else None
     board = Board.new()

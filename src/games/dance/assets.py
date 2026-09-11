@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import pygame
 
 from .config import BACKGROUND, FONT_PATH, FOREGROUND, TITLE
 from .gameplay import Judgement
 from .songs import Song, fallback_cover_path
+
+
+GAMEPLAY_ASSET_DIRECTORY = Path(__file__).parent / "assets" / "gameplay"
 
 
 class Assets:
@@ -57,7 +61,7 @@ class Assets:
         return strip
 
     def _load_rotated(self, filename: str) -> dict[str, pygame.Surface]:
-        arrow = pygame.image.load(FONT_PATH.parent.parent / "gameplay" / filename)
+        arrow = pygame.image.load(GAMEPLAY_ASSET_DIRECTORY / filename)
         return {
             "up": arrow,
             "down": pygame.transform.rotate(arrow, 180),
@@ -66,7 +70,7 @@ class Assets:
         }
 
     def _load_feedback_icons(self) -> dict[Judgement, pygame.Surface]:
-        asset_directory = FONT_PATH.parent.parent / "gameplay"
+        asset_directory = GAMEPLAY_ASSET_DIRECTORY
         return {
             Judgement.GREAT: pygame.image.load(asset_directory / "heart.png"),
             Judgement.OK: pygame.image.load(asset_directory / "thumb.png"),
@@ -74,7 +78,7 @@ class Assets:
         }
 
     def _load_result_stars(self) -> tuple[pygame.Surface, pygame.Surface]:
-        star = pygame.image.load(FONT_PATH.parent.parent / "gameplay" / "star.png")
+        star = pygame.image.load(GAMEPLAY_ASSET_DIRECTORY / "star.png")
         draft = star.copy()
         draft.fill((110, 110, 110), special_flags=pygame.BLEND_RGBA_MULT)
         earned = star.copy()
