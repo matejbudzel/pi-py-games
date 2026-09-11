@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pi-dance"
+name = "pi-py-games"
 version = "0.1.0"
-description = "A tiny DDR-style rhythm game for Raspberry Pi 1 B+"
+description = "Small mat-first retro-style Pygame games for Raspberry Pi 1"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,10 +13,12 @@ dependencies = [
 ]
 
 [project.scripts]
-pi-dance = "pi_dance.main:main"
+pi-dance = "games.dance.main:main"
+pi-2048 = "games.twenty48.main:main"
+pi-py-games = "pi_py_games.provider:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-pi_dance = ["assets/fonts/*.ttf", "assets/fonts/*.txt", "assets/gameplay/*.png", "assets/gameplay/*.bmp"]
+"games.dance" = ["assets/fonts/*.ttf", "assets/fonts/*.txt", "assets/gameplay/*.png", "assets/gameplay/*.bmp"]

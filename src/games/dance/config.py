@@ -1,6 +1,7 @@
 from configparser import ConfigParser
 from dataclasses import dataclass
 from pathlib import Path
+import os
 
 
 APP_WIDTH = 854
@@ -28,8 +29,10 @@ class Settings:
     error_log: Path
 
 
-def load_settings(config_path: Path = Path("pi-dance.ini")) -> Settings:
+def load_settings(config_path: Path | None = None) -> Settings:
     """Load user-editable settings, falling back to portable defaults."""
+    if config_path is None:
+        config_path = Path(os.environ.get("PI_DANCE_CONFIG", "pi-dance.ini")).expanduser()
     parser = ConfigParser()
     parser.read(config_path, encoding="utf-8")
 

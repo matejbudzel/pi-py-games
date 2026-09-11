@@ -211,15 +211,11 @@ class AppRecoveryTests(unittest.TestCase):
             factory.assert_called_once()
             factory.return_value.run.assert_called_once()
 
-    def test_launcher_mode_shows_splash_and_sinks_output(self):
+    def test_main_needs_no_launcher_specific_mode(self):
         factory = Mock()
-        with patch('pi_dance.main._show_launcher_splash') as splash, \
-             patch('pi_dance.main._sink_terminal_output') as sink, \
-             patch('pi_dance.main.configure_logging'), \
+        with patch('pi_dance.main.configure_logging'), \
              patch('pi_dance.main._application_types', return_value=(factory, Mock())):
-            main(['--from-rpi-launcher'])
-        splash.assert_called_once()
-        sink.assert_called_once()
+            main([])
         factory.return_value.run.assert_called_once()
 
     def test_supervisor_restarts_at_list_and_backs_off(self):

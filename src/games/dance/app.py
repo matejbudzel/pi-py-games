@@ -13,12 +13,12 @@ from .assets import Assets
 from .charts import Chart, difficulty_key, load_sm
 from .config import APP_HEIGHT, APP_WIDTH, BACKGROUND, SETTINGS, SONG_DIRECTORY, TARGET_FPS, WINDOW_TITLE
 from .gameplay import JudgedNote, Judgement, Session
-from .fbdev import FbdevPresenter
-from .console_input import ConsoleInput
-from .input import Action, DeviceEvent, Release, actions_from_event
-from .joystick_input import JoystickInput
-from .display_monitor import DisplayMonitor
-from .performance import FrameTiming, PerformanceTracker
+from common.fbdev import FbdevPresenter
+from common.console_input import ConsoleInput
+from common.input import Action, DeviceEvent, Release, actions_from_event
+from common.joystick_input import JoystickInput
+from common.display_monitor import DisplayMonitor
+from common.performance import FrameTiming, PerformanceTracker
 from .songs import Song, discover_songs
 from . import views
 

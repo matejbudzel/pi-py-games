@@ -15,7 +15,7 @@ Prefer a working, understandable MVP over completeness or abstraction.
 - Do not introduce Raspberry-Pi-specific architecture unless profiling on the real device demonstrates a need.
 - Keep platform-specific display, joystick and latency configuration isolated from core game logic.
 
-The public repository `matejbudzel/pi-286-games` is the authoritative operational reference for the target Pi/DietPi hardware and display setup. Reuse its hardware knowledge where appropriate, but do not copy DOSBox-specific constraints into this application.
+The sibling `pi-games-launcher` repository is the authoritative operational reference for the target Pi/DietPi hardware, display setup, and guest-process ownership. Reuse its hardware knowledge where appropriate, but do not take ownership of launcher hardware lifecycle.
 
 ## Input contract
 

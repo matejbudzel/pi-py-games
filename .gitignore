@@ -2,4 +2,6 @@
 *.egg-info/
 __pycache__/
 *.py[cod]
+pi-py-games.ini
 pi-dance.ini
+.pytest_cache/

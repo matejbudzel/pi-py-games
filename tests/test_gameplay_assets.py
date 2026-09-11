@@ -7,7 +7,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 import pygame
 
 
-ASSET_DIRECTORY = Path(__file__).parents[1] / "src" / "pi_dance" / "assets" / "gameplay"
+ASSET_DIRECTORY = Path(__file__).parents[1] / "src" / "games" / "dance" / "assets" / "gameplay"
 
 
 class GameplayAssetTests(unittest.TestCase):

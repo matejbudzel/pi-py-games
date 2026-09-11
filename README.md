@@ -1,6 +1,34 @@
-# pi-dance
+# pi-py-games
 
-A deliberately small Dance Dance Revolution-style rhythm game for very low-end hardware, primarily the Raspberry Pi 1 B+ (256 MB), built with Python and Pygame.
+A small monorepo of retro-like, dance-mat-first Python/Pygame games for the Raspberry Pi 1 B+ (256 MB). It is a provider for the sibling [`pi-games-launcher`](../pi-games-launcher): the launcher owns the appliance console, framebuffer and menu; a selected game owns Pygame, audio, and its physical input until it exits.
+
+Games live in `src/games/`, with their code, assets, and game-specific configuration kept together. `src/common/` contains the small shared layer: canonical keyboard/dance-pad actions, joystick lifecycle, framebuffer/display support, console input, and lightweight performance timing. There is no workspace tool or generated monorepo setup.
+
+Included games are **pi-dance**, the original small DDR-style rhythm game, and **2048**, a compact 320×240 tile game controlled with the same dance mat. Future games add one package under `src/games/` and one registry entry; the launcher continues to use the same provider contract.
+
+## Launcher provider
+
+Install the project so the `pi-py-games` and `pi-dance` commands are on `PATH`, then copy `pi-py-games.ini.example` to ignored `pi-py-games.ini`:
+
+```ini
+[pi-dance]
+config=/path/to/pi-dance.ini
+
+[2048]
+# 2048 has no settings yet; this entry may be omitted.
+config=/path/to/pi-2048.ini
+```
+
+Configure `pi-games-launcher` with a provider command such as:
+
+```ini
+[provider pygame]
+manifest_command=pi-py-games --config /path/to/pi-py-games.ini manifest
+```
+
+The provider emits manifest schema version 1 and supports `pi-py-games run pi-dance`. The launcher runs that command as an external guest, so no input, display, audio, framebuffer, or game exit conventions are proxied through the launcher.
+
+## pi-dance
 
 The first goal is not to build a complete StepMania clone. The MVP exists to answer a simpler question: **will the kids actually want to use the dance pad?**
 
@@ -95,7 +123,7 @@ The Raspberry Pi is **not** the primary development surface. The game must run n
 
 Keyboard input is a **first-class controller**, not a debug fallback. Everything required to play and navigate the MVP must be possible from the keyboard.
 
-The [`matejbudzel/pi-286-games`](https://github.com/matejbudzel/pi-286-games) repository is the authoritative reference for the target Raspberry Pi 1 B+ / DietPi device, display environment, deployment conventions and known hardware constraints. This project should reuse that operational knowledge where applicable, but should not inherit DOSBox-specific architectural constraints.
+The sibling `pi-games-launcher` repository is the authoritative reference for the target Raspberry Pi 1 B+ / DietPi device, display environment, deployment conventions and known hardware constraints. This project should reuse that operational knowledge where applicable, but should not take ownership of appliance lifecycle.
 
 ## Audio and songs
 
@@ -378,15 +406,10 @@ Start the game from the project directory so it reads that local configuration:
 .venv/bin/pi-dance
 ```
 
-When the Raspberry Pi LTUI launcher starts the game, use its launcher mode:
-
-```bash
-.venv/bin/pi-dance --from-rpi-launcher
-```
-
-It immediately replaces the terminal with a static `[ ... spúšťam ... ]` screen,
-then suppresses the game's standard output and error output until the game takes
-over the display. Normal launches keep their existing terminal behavior.
+When started through `pi-games-launcher`, use the `pi-py-games` provider rather
+than a game-specific launcher flag. The generic launcher releases its terminal,
+framebuffer and input handles before starting `pi-dance`; the game then owns
+them directly until it exits.
 
 Press F8 at any time to show or hide the developer performance overlay.
 It displays the most recent frame's input (`i`), update (`u`), render (`r`),
@@ -408,7 +431,7 @@ any keyboard or joystick button to exit. If no pattern appears, stop with
 Ctrl+C and keep the printed driver name: it identifies the display-backend
 problem independently of the game.
 
-The Pi 1 legacy setup used by `pi-286-games` exposes `/dev/fb0` instead of an
+The Pi 1 legacy setup managed by `pi-games-launcher` exposes `/dev/fb0` instead of an
 SDL2 display driver. Test its direct presenter with:
 
 ```bash

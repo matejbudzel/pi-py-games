@@ -41,7 +41,7 @@ class PerformanceTracker:
         duration = max(0.0, (time.perf_counter() if now is None else now) - self.started_at)
         average_fps = 0.0 if duration == 0 else self.frames / duration
         lines = [
-            "pi-dance performance report",
+            "pygame game performance report",
             f"duration_seconds={duration:.3f}",
             f"frames={self.frames}",
             f"average_fps={average_fps:.2f}",

@@ -115,7 +115,7 @@ def input_cover(song_dir: Path) -> Path | None:
 
 
 def fallback_cover_path() -> Path:
-    return Path(__file__).parents[1] / "src" / "pi_dance" / "assets" / "gameplay" / "fallback-cover.bmp"
+    return Path(__file__).parents[1] / "src" / "games" / "dance" / "assets" / "gameplay" / "fallback-cover.bmp"
 
 
 def audio_duration_seconds(audio_path: Path) -> float:

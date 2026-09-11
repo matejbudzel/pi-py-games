@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pygame
 
-from pi_dance.fbdev import FbdevPresenter, FramebufferError
+from common.fbdev import FbdevPresenter, FramebufferError
 
 
 def parse_args() -> argparse.Namespace:
