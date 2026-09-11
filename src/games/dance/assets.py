@@ -38,7 +38,9 @@ class Assets:
             except (OSError, pygame.error):
                 logging.getLogger(__name__).warning("Cannot load cover %s", song.cover_path, exc_info=True)
                 cover = pygame.image.load(fallback_cover_path())
-            self.covers[song.path] = pygame.transform.scale(cover.convert(canvas), (256, 256))
+            converted = pygame.Surface(cover.get_size(), depth=canvas.get_bitsize(), masks=canvas.get_masks())
+            converted.blit(cover, (0, 0))
+            self.covers[song.path] = pygame.transform.scale(converted, (256, 256))
 
     def cover_for(self, song: Song) -> pygame.Surface:
         return self.covers[song.path]
@@ -47,7 +49,7 @@ class Assets:
     def _make_hold_tail(canvas: pygame.Surface) -> pygame.Surface:
         """Cache 40 visible dots plus one rainbow cycle for scrolling phase."""
         colors = ((255, 75, 125), (255, 160, 65), (255, 225, 70), (80, 225, 130), (55, 225, 255), (175, 110, 255))
-        strip = pygame.Surface((8, 45 * 12 + 8)).convert(canvas)
+        strip = pygame.Surface((8, 45 * 12 + 8), depth=canvas.get_bitsize(), masks=canvas.get_masks())
         strip.fill((0, 0, 0))
         for index in range(46):
             pygame.draw.circle(strip, colors[index % len(colors)], (4, strip.get_height() - 4 - index * 12), 4)
@@ -55,7 +57,7 @@ class Assets:
         return strip
 
     def _load_rotated(self, filename: str) -> dict[str, pygame.Surface]:
-        arrow = pygame.image.load(FONT_PATH.parent.parent / "gameplay" / filename).convert_alpha()
+        arrow = pygame.image.load(FONT_PATH.parent.parent / "gameplay" / filename)
         return {
             "up": arrow,
             "down": pygame.transform.rotate(arrow, 180),
@@ -66,13 +68,13 @@ class Assets:
     def _load_feedback_icons(self) -> dict[Judgement, pygame.Surface]:
         asset_directory = FONT_PATH.parent.parent / "gameplay"
         return {
-            Judgement.GREAT: pygame.image.load(asset_directory / "heart.png").convert_alpha(),
-            Judgement.OK: pygame.image.load(asset_directory / "thumb.png").convert_alpha(),
-            Judgement.MISS: pygame.image.load(asset_directory / "shrug.png").convert_alpha(),
+            Judgement.GREAT: pygame.image.load(asset_directory / "heart.png"),
+            Judgement.OK: pygame.image.load(asset_directory / "thumb.png"),
+            Judgement.MISS: pygame.image.load(asset_directory / "shrug.png"),
         }
 
     def _load_result_stars(self) -> tuple[pygame.Surface, pygame.Surface]:
-        star = pygame.image.load(FONT_PATH.parent.parent / "gameplay" / "star.png").convert_alpha()
+        star = pygame.image.load(FONT_PATH.parent.parent / "gameplay" / "star.png")
         draft = star.copy()
         draft.fill((110, 110, 110), special_flags=pygame.BLEND_RGBA_MULT)
         earned = star.copy()
