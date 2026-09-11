@@ -1,6 +1,6 @@
 import unittest
 
-from pi_dance.performance import FrameTiming, PerformanceTracker
+from common.performance import FrameTiming, PerformanceTracker
 
 
 class PerformanceTrackerTests(unittest.TestCase):
