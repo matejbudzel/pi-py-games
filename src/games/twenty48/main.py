@@ -60,15 +60,18 @@ def main() -> None:
         with console_input or _NullContext():
             while running:
                 actions = []
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        running = False
-                        continue
-                    if joystick is not None:
-                        joystick.handle_event(event)
-                    actions.extend(actions_from_event(event))
                 if console_input is not None:
+                    # In fbdev mode the Linux console is the sole keyboard owner.
+                    # Do not let SDL's dummy driver drain terminal key bytes first.
                     actions.extend(action for action in console_input.poll_actions() if isinstance(action, Action))
+                else:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            running = False
+                            continue
+                        if joystick is not None:
+                            joystick.handle_event(event)
+                        actions.extend(actions_from_event(event))
                 for action in actions:
                     if action is Action.SELECT:
                         running = False

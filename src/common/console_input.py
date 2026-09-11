@@ -25,7 +25,7 @@ JSIOCGNAME = 0x80806A13
 JSIOCGAXES = 0x80016A11
 JSIOCGBUTTONS = 0x80016A12
 PAD_DEVICE_NAME = "WiseGroup.,Ltd X-PAD, Extreme Dance Pad"
-INPUT_STATUS_PATH = Path("/tmp/pi-dance-input.txt")
+INPUT_STATUS_PATH = Path("/tmp/pi-py-games-input.txt")
 
 KEY_SEQUENCES = {
     b"\x1b[A": Action.UP,
@@ -61,6 +61,7 @@ class ConsoleInput:
         self._joysticks = []
         self._input_status = []
         self._button_events: list[str] = []
+        self._keyboard_events: list[str] = []
         try:
             tty.setraw(self._keyboard_fd)
             self._pending = b""
@@ -94,6 +95,10 @@ class ConsoleInput:
 
     def poll_actions(self) -> list[Action | Release | DeviceEvent]:
         actions: list[Action | Release | DeviceEvent] = list(self._read_keyboard_actions())
+        if actions:
+            self._keyboard_events.extend(action.name for action in actions if isinstance(action, Action))
+            self._keyboard_events = self._keyboard_events[-30:]
+            self._write_input_status()
         if not self._joysticks and time.monotonic() >= self._next_joystick_retry:
             self._joysticks, self._input_status = self._open_joysticks()
             self._next_joystick_retry = time.monotonic() + 2.0
@@ -181,7 +186,9 @@ class ConsoleInput:
         return descriptors, status
 
     def _write_input_status(self) -> None:
-        lines = ["pi-dance input status", *self._input_status]
+        lines = ["pi-py-games input status", *self._input_status]
+        if self._keyboard_events:
+            lines.extend(("", "Keyboard actions received:", *self._keyboard_events[-30:]))
         if self._button_events:
             lines.extend(("", "Button presses received:", *self._button_events[-30:]))
         try:
