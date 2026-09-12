@@ -31,6 +31,8 @@ PREVIEW_SIZE = 128
 PREVIEW_RECT = pygame.Rect(282, 76, PREVIEW_SIZE, PREVIEW_SIZE)
 TITLE_RECT = pygame.Rect(34, 0, PREVIEW_RECT.left - 46, 16)
 MENU_BACKGROUND_PATH = Path(__file__).parent / "assets" / "menu-lawn.png"
+RESULT_FAILED_PATH = Path(__file__).parent / "assets" / "result-failed.png"
+RESULT_SUCCESS_PATH = Path(__file__).parent / "assets" / "result-success.png"
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
@@ -77,6 +79,8 @@ class App:
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
         self.menu_background = self._load_menu_background()
+        self.result_failed_background = self._load_scene(RESULT_FAILED_PATH, (38, 80, 55))
+        self.result_success_background = self._load_scene(RESULT_SUCCESS_PATH, (38, 80, 55))
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
         self.song_labels = {song.audio_path: self._ellipsize_title(song.title) for song in self.songs}
         self.selected, self.first_visible, self.screen, self.running = 0, 0, Screen.LIST, True
@@ -95,7 +99,7 @@ class App:
         self.active_stance = None
         self.score = 0
         self.clean_transitions = 0
-        self.result_stars = 1
+        self.result_success = False
         self.performance = PerformanceTracker()
         self.max_audio_step_ms = 0.0
         self.audio_jump_count = 0
@@ -321,7 +325,10 @@ class App:
         if valid:
             self.score += int(delta * 10)
         if self.stamina.value <= 0 or now >= self.song.duration or (not pygame.mixer.music.get_busy() and now > 0.5):
-            pygame.mixer.music.stop(); self.result_stars = max(1, min(5, round(self.stamina.value / 25) + 1)); self._write_performance_report("stamina" if self.stamina.value <= 0 else "complete"); self.screen = Screen.RESULT
+            self.result_success = self.stamina.value > 0
+            pygame.mixer.music.stop()
+            self._write_performance_report("complete" if self.result_success else "stamina")
+            self.screen = Screen.RESULT
 
     def _write_performance_report(self, outcome: str) -> None:
         if self.report_written:
@@ -370,10 +377,13 @@ class App:
                 surface.blit(preview, PREVIEW_RECT.topleft)
             return None
         if self.screen is Screen.RESULT:
-            self._draw_background(surface)
-            surface.blit(self.big_font.render("*" * self.result_stars, False, (255, 221, 88)), (150, 94))
-            pygame.draw.circle(surface, (94, 220, 155), (213, 138), 18)
-            pygame.draw.circle(surface, (25, 30, 58), (207, 133), 2); pygame.draw.circle(surface, (25, 30, 58), (219, 133), 2)
+            surface.blit(self.result_success_background if self.result_success else self.result_failed_background, (0, 0))
+            if self.result_success:
+                score = self.big_font.render(str(self.score), False, (255, 235, 109))
+                shadow = self.big_font.render(str(self.score), False, (24, 48, 40))
+                score_rect = score.get_rect(center=(WIDTH // 2, 55))
+                surface.blit(shadow, score_rect.move(1, 1))
+                surface.blit(score, score_rect)
             return None
         if self.gameplay_base is None:
             self.gameplay_base = self._create_gameplay_base()
@@ -439,15 +449,19 @@ class App:
 
     def _load_menu_background(self) -> pygame.Surface:
         """Keep menu art separate from gameplay and decode it only once."""
+        return self._load_scene(MENU_BACKGROUND_PATH, (17, 48, 43))
+
+    def _load_scene(self, path: Path, fallback: tuple[int, int, int]) -> pygame.Surface:
+        """Decode a logical-resolution scene once, using a safe solid fallback."""
         background = pygame.Surface((WIDTH, HEIGHT), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
         try:
-            image = pygame.image.load(MENU_BACKGROUND_PATH)
+            image = pygame.image.load(path)
             converted = pygame.Surface(image.get_size(), depth=background.get_bitsize(), masks=background.get_masks())
             converted.blit(image, (0, 0))
             pygame.transform.scale(converted, background.get_size(), background)
         except (OSError, pygame.error):
-            logging.getLogger(__name__).warning("Cannot load Shadow Run menu background %s", MENU_BACKGROUND_PATH)
-            background.fill((17, 48, 43))
+            logging.getLogger(__name__).warning("Cannot load Shadow Run scene %s", path)
+            background.fill(fallback)
         return background
 
     def _load_cover_preview(self, song: Song) -> pygame.Surface:
