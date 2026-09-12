@@ -33,6 +33,13 @@ def _display_environment(path: Path) -> dict[str, str]:
     }
 
 
+def _game_title(provider_config: Path, game_id: str, default_title: str, default_config: str) -> str:
+    """Read the game's user-facing title without importing its Pygame package."""
+    parser = ConfigParser(interpolation=None)
+    parser.read(_settings(provider_config, game_id, default_config), encoding="utf-8")
+    return parser.get("game", "title", fallback=default_title).strip() or default_title
+
+
 def _logging_environment(path: Path) -> dict[str, str]:
     parser = ConfigParser(interpolation=None)
     parser.read(path, encoding="utf-8")
@@ -46,9 +53,9 @@ def manifest(config_path: Path | None = None) -> dict:
         "version": MANIFEST_VERSION,
         "games": [{
             "id": game_id,
-            "title": title,
+            "title": _game_title(config_path, game_id, title, default_config) if config_path else title,
             "command": [sys.executable, "-m", "pi_py_games.provider", "--config", str(config_path) if config_path else "pi-py-games.ini", "run", game_id],
-        } for game_id, title, _, _, _ in GAMES],
+        } for game_id, title, _, _, default_config in GAMES],
     }
 
 

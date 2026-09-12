@@ -23,6 +23,18 @@ LANE_X, TILE, TOP, PLAYER_Y = 166, 30, 18, 202
 PREPLAY_SECONDS = 3.0
 SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
+VISIBLE_SONG_ROWS = 10
+
+
+def visible_song_window(first_visible: int, selected: int, song_count: int) -> int:
+    """Return the first list index while keeping the selected row on-screen."""
+    if song_count <= VISIBLE_SONG_ROWS:
+        return 0
+    if selected < first_visible:
+        return selected
+    if selected >= first_visible + VISIBLE_SONG_ROWS:
+        return selected - VISIBLE_SONG_ROWS + 1
+    return first_visible
 
 
 class Screen(Enum):
@@ -44,7 +56,7 @@ class App:
         self.joystick = JoystickInput() if self.platform.backend == "pygame" else None
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
-        self.selected, self.screen, self.running = 0, Screen.LIST, True
+        self.selected, self.first_visible, self.screen, self.running = 0, 0, Screen.LIST, True
         self.held: set[str] = set()
         self.song: Song | None = None
         self.timeline: TerrainTimeline | None = None
@@ -101,8 +113,12 @@ class App:
                 else:
                     self.running = False
             elif self.screen is Screen.LIST:
-                if action is Action.UP and self.songs: self.selected = (self.selected - 1) % len(self.songs)
-                elif action is Action.DOWN and self.songs: self.selected = (self.selected + 1) % len(self.songs)
+                if action is Action.UP and self.songs:
+                    self.selected = (self.selected - 1) % len(self.songs)
+                    self.first_visible = visible_song_window(self.first_visible, self.selected, len(self.songs))
+                elif action is Action.DOWN and self.songs:
+                    self.selected = (self.selected + 1) % len(self.songs)
+                    self.first_visible = visible_song_window(self.first_visible, self.selected, len(self.songs))
                 elif action is Action.START and self.songs: self._start(self.songs[self.selected])
             elif self.screen is Screen.RESULT and action is Action.START:
                 self.screen = Screen.LIST
@@ -175,8 +191,9 @@ class App:
             surface.blit(big.render(self.settings.title, False, (255, 225, 122)), (22, 22))
             if not self.songs:
                 surface.blit(font.render("No prepared WAV songs", False, (220, 220, 230)), (22, 72))
-            for index, song in enumerate(self.songs[:10]):
-                y = 52 + index * 18
+            for row, song in enumerate(self.songs[self.first_visible:self.first_visible + VISIBLE_SONG_ROWS]):
+                index = self.first_visible + row
+                y = 52 + row * 18
                 if index == self.selected: surface.blit(font.render(">", False, (255, 210, 80)), (20, y))
                 surface.blit(font.render(song.title[:27], False, (240, 242, 255)), (34, y))
                 surface.blit(font.render(f"{song.duration:.0f}s {song.tempo_bpm:.0f}", False, (140, 180, 210)), (286, y))

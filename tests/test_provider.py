@@ -15,6 +15,17 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(document["games"][0]["command"][1:], ["-m", "pi_py_games.provider", "--config", "/games/pi-py-games.ini", "run", "pi-dance"])
         self.assertEqual(document["games"][1]["id"], "2048")
 
+    def test_manifest_uses_game_configured_title(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            game_config = root / "shadow.ini"
+            game_config.write_text("[game]\ntitle=Tienozem\n", encoding="utf-8")
+            provider_config = root / "provider.ini"
+            provider_config.write_text("[shadow-run]\nconfig=shadow.ini\n", encoding="utf-8")
+            document = provider.manifest(provider_config)
+        shadow_run = next(game for game in document["games"] if game["id"] == "shadow-run")
+        self.assertEqual(shadow_run["title"], "Tienozem")
+
     def test_run_rejects_unknown_game(self):
         with self.assertRaises(ValueError):
             provider.run("not-a-game", Path("pi-py-games.ini"))

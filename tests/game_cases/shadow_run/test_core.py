@@ -10,6 +10,7 @@ from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, Terrain
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
 from games.shadow_run.main import command_arguments
+from games.shadow_run.app import visible_song_window
 
 
 class CoreTests(unittest.TestCase):
@@ -25,6 +26,11 @@ class CoreTests(unittest.TestCase):
         with patch("games.shadow_run.main.sys.argv", ["/x/runner.py", "shadow-run", "games.shadow_run.main"]):
             self.assertEqual(command_arguments(), [])
         self.assertEqual(command_arguments(["--seed", "4"]), ["--seed", "4"])
+
+    def test_song_window_keeps_wrapped_selection_visible(self):
+        self.assertEqual(visible_song_window(0, 10, 19), 1)
+        self.assertEqual(visible_song_window(9, 0, 19), 0)
+        self.assertEqual(visible_song_window(4, 7, 8), 0)
 
     def test_transitions_keep_a_lane_occupied(self):
         self.assertTrue(is_safe_transition((Lane.LEFT, Lane.CENTER), (Lane.CENTER, Lane.RIGHT)))
