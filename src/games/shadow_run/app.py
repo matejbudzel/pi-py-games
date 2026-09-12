@@ -20,6 +20,9 @@ from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
 LANE_X, TILE, TOP, PLAYER_Y = 166, 30, 18, 202
+PREPLAY_SECONDS = 3.0
+SAFE_TILE = (37, 105, 62)       # dark grass shadow
+DANGER_TILE = (104, 178, 83)   # sunlit grass
 
 
 class Screen(Enum):
@@ -47,6 +50,8 @@ class App:
         self.timeline: TerrainTimeline | None = None
         self.stamina = Stamina()
         self.started_at = 0.0
+        self.preplay_started_at = 0.0
+        self.music_started = False
         self.last_time = 0.0
         self.active_stance = None
         self.score = 0
@@ -111,11 +116,17 @@ class App:
     def _start(self, song: Song) -> None:
         self.song, self.timeline = song, TerrainTimeline(song.beats, self.seed)
         self.stamina, self.score, self.clean_transitions = Stamina(), 0, 0
-        self.started_at = time.monotonic(); self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear()
-        pygame.mixer.music.load(str(song.audio_path)); pygame.mixer.music.play()
+        self.preplay_started_at = time.monotonic()
+        self.started_at = 0.0
+        self.music_started = False
+        self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear()
+        # Decode before the start line reaches the receptor, but remain silent.
+        pygame.mixer.music.load(str(song.audio_path))
         self.screen = Screen.PLAYING
 
     def _song_time(self) -> float:
+        if not self.music_started:
+            return 0.0
         # get_pos follows mixer playback; monotonic protects startup/platform quirks.
         position = pygame.mixer.music.get_pos()
         fallback = time.monotonic() - self.started_at
@@ -124,6 +135,13 @@ class App:
     def _update(self) -> None:
         if self.screen is not Screen.PLAYING or self.song is None or self.timeline is None:
             return
+        if not self.music_started:
+            if time.monotonic() - self.preplay_started_at < PREPLAY_SECONDS:
+                return
+            self.started_at = time.monotonic()
+            self.music_started = True
+            pygame.mixer.music.play()
+            self.last_time = 0.0
         now = min(self.song.duration, self._song_time())
         delta = min(0.1, max(0.0, now - self.last_time)); self.last_time = now
         # Six seconds of look-ahead lets a new safe stance travel visibly from
@@ -178,18 +196,21 @@ class App:
         # The row offset advances every frame. Each row asks the planned
         # timeline which stance it will require when it reaches the receptor.
         pygame.draw.rect(self.screen_surface, (45, 12, 38), (LANE_X - 4, TOP - 4, TILE * 3 + 8, 218))
-        offset = int(now * speed) % TILE
+        preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
+        scroll_time = now if self.music_started else preplay_elapsed
+        offset = int(scroll_time * speed) % TILE
         for row in range(-1, 8):
             y = TOP + offset + row * TILE
             reaches_receptor_at = now + (PLAYER_Y - y) / speed
-            safe = set(self.timeline.stance_at(max(0.0, reaches_receptor_at)))
+            safe = set(Lane) if not self.music_started else set(self.timeline.stance_at(max(0.0, reaches_receptor_at)))
             for lane in Lane:
-                tile_phase = (row + lane.value) % 3
-                color = ((238, 78, 51), (242, 98, 59), (255, 121, 58))[tile_phase] if lane not in safe else ((63, 174, 126), (78, 190, 132), (91, 203, 141))[tile_phase]
+                color = SAFE_TILE if lane in safe else DANGER_TILE
                 pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
-                pygame.draw.rect(self.screen_surface, (255, 174, 69) if lane not in safe else (164, 236, 143), (LANE_X + lane.value * TILE + 5 + tile_phase * 3, y + 5, 5, 3))
+        contacts = lane_contacts(self.held)
         for lane in Lane:
-            pygame.draw.rect(self.screen_surface, (240, 245, 255), (LANE_X + lane.value * TILE + 4, PLAYER_Y, TILE - 8, 5))
+            receptor = pygame.Rect(LANE_X + lane.value * TILE + 3, PLAYER_Y - 6, TILE - 6, 12)
+            pygame.draw.rect(self.screen_surface, (255, 226, 100) if lane in contacts else (31, 43, 68), receptor)
+            pygame.draw.rect(self.screen_surface, (240, 245, 255), receptor, 1)
         pygame.draw.rect(self.screen_surface, (220, 55, 83), (20, 80, 14, 110))
         pygame.draw.rect(self.screen_surface, (83, 220, 130), (20, 190 - int(self.stamina.value), 14, int(self.stamina.value)))
         progress = self._song_time() / self.song.duration
@@ -197,3 +218,13 @@ class App:
         self.screen_surface.blit(font.render(str(self.score), False, (255, 230, 135)), (330, 80))
         if self.timeline.in_transition_window(now, self.song.duration):
             pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)
+        if not self.music_started:
+            # A striped line visibly flows from the top to the receptor during
+            # the silent grace period and becomes the first terrain boundary.
+            start_y = round(TOP + (PLAYER_Y - TOP) * (preplay_elapsed / PREPLAY_SECONDS))
+            for lane in Lane:
+                x = LANE_X + lane.value * TILE
+                pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_y), (x + TILE, start_y), 2)
+            remaining = max(1, int(PREPLAY_SECONDS - preplay_elapsed - 0.001) + 1)
+            countdown = pygame.font.Font(SWEET16_FONT_PATH, 24).render(str(remaining), False, (255, 235, 109))
+            self.screen_surface.blit(countdown, countdown.get_rect(center=(WIDTH // 2, 70)))
