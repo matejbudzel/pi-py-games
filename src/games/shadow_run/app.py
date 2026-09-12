@@ -33,12 +33,15 @@ TITLE_RECT = pygame.Rect(34, 0, PREVIEW_RECT.left - 46, 16)
 MENU_BACKGROUND_PATH = Path(__file__).parent / "assets" / "menu-lawn.png"
 RESULT_FAILED_PATH = Path(__file__).parent / "assets" / "result-failed.png"
 RESULT_SUCCESS_PATH = Path(__file__).parent / "assets" / "result-success.png"
+GAMEPLAY_BACKGROUND_PATH = Path(__file__).parent / "assets" / "gameplay-lawn.png"
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
-GRID_RECT = pygame.Rect(LANE_X - 4, 0, TILE * 3 + 8, HEIGHT)
-LEFT_HUD_RECT = pygame.Rect(20, 80, 108, 110)
-RIGHT_HUD_RECT = pygame.Rect(330, 80, 80, 24)
+GRID_RECT = pygame.Rect(LANE_X - 10, 0, TILE * 3 + 20, HEIGHT)
+STAMINA_RECT = pygame.Rect(42, 80, 14, 110)
+LEFT_HUD_RECT = pygame.Rect(28, 70, 42, 130)
+PROGRESS_RECT = pygame.Rect(292, 84, 112, 6)
+RIGHT_HUD_RECT = pygame.Rect(280, 48, 136, 56)
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
@@ -79,6 +82,7 @@ class App:
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
         self.menu_background = self._load_menu_background()
+        self.gameplay_background = self._load_scene(GAMEPLAY_BACKGROUND_PATH, (24, 58, 42))
         self.result_failed_background = self._load_scene(RESULT_FAILED_PATH, (38, 80, 55))
         self.result_success_background = self._load_scene(RESULT_SUCCESS_PATH, (38, 80, 55))
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
@@ -409,16 +413,9 @@ class App:
             return [pygame.Rect(0, 0, WIDTH, HEIGHT)]
         return self._gameplay_dirty_rectangles()
 
-    @staticmethod
-    def _draw_background(surface: pygame.Surface) -> None:
-        surface.fill((25, 30, 58))
-        for x, y in ((20, 18), (92, 49), (330, 24), (400, 110), (45, 180)):
-            pygame.draw.rect(surface, (72, 88, 145), (x, y, 2, 2))
-
     def _create_gameplay_base(self) -> pygame.Surface:
         base = pygame.Surface((WIDTH, HEIGHT), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
-        self._draw_background(base)
-        pygame.draw.rect(base, (45, 12, 38), GRID_RECT)
+        base.blit(self.gameplay_background, (0, 0))
         return base
 
     def _draw_modal(self, message: str, confirmation: bool = False) -> None:
@@ -549,11 +546,14 @@ class App:
             receptor = pygame.Rect(LANE_X + lane.value * TILE + 3, PLAYER_Y - 6, TILE - 6, 12)
             pygame.draw.rect(self.screen_surface, (255, 226, 100) if lane in contacts else (31, 43, 68), receptor)
             pygame.draw.rect(self.screen_surface, (240, 245, 255), receptor, 1)
-        pygame.draw.rect(self.screen_surface, (220, 55, 83), (20, 80, 14, 110))
-        pygame.draw.rect(self.screen_surface, (83, 220, 130), (20, 190 - int(self.stamina.value), 14, int(self.stamina.value)))
+        pygame.draw.rect(self.screen_surface, (42, 43, 43), STAMINA_RECT)
+        pygame.draw.rect(self.screen_surface, (83, 220, 130), (STAMINA_RECT.x, STAMINA_RECT.bottom - int(self.stamina.value), STAMINA_RECT.width, int(self.stamina.value)))
+        pygame.draw.rect(self.screen_surface, (223, 237, 205), STAMINA_RECT, 1)
         progress = self._song_time() / self.song.duration
-        pygame.draw.rect(self.screen_surface, (70, 80, 114), (48, 80, 80, 6)); pygame.draw.rect(self.screen_surface, (255, 210, 90), (48, 80, int(80 * progress), 6))
-        self.screen_surface.blit(self.font.render(str(self.score), False, (255, 230, 135)), (330, 80))
+        pygame.draw.rect(self.screen_surface, (49, 86, 87), PROGRESS_RECT)
+        pygame.draw.rect(self.screen_surface, (255, 210, 90), (PROGRESS_RECT.x, PROGRESS_RECT.y, int(PROGRESS_RECT.width * progress), PROGRESS_RECT.height))
+        score = self.font.render(str(self.score), False, (30, 68, 61))
+        self.screen_surface.blit(score, score.get_rect(center=(PROGRESS_RECT.centerx, 63)))
         if self.timeline.in_transition_window(now, self.song.duration):
             pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)
         if not self.music_started:

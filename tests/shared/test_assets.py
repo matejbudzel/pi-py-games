@@ -9,6 +9,6 @@ class SharedAssetsTests(unittest.TestCase):
         self.assertTrue(SWEET16_FONT_PATH.is_file())
 
     def test_shadow_run_song_list_background_is_shipped(self):
-        from games.shadow_run.app import MENU_BACKGROUND_PATH, RESULT_FAILED_PATH, RESULT_SUCCESS_PATH
-        self.assertTrue(all(path.is_file() for path in (MENU_BACKGROUND_PATH, RESULT_FAILED_PATH, RESULT_SUCCESS_PATH)))
+        from games.shadow_run.app import GAMEPLAY_BACKGROUND_PATH, MENU_BACKGROUND_PATH, RESULT_FAILED_PATH, RESULT_SUCCESS_PATH
+        self.assertTrue(all(path.is_file() for path in (MENU_BACKGROUND_PATH, GAMEPLAY_BACKGROUND_PATH, RESULT_FAILED_PATH, RESULT_SUCCESS_PATH)))
         self.assertEqual(FONT_PATH, SWEET16_FONT_PATH)
