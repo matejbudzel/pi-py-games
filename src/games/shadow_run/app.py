@@ -22,13 +22,14 @@ from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
-LANE_X, TILE, TOP, PLAYER_Y = 166, 30, 18, 202
+LANE_X, TILE, PLAYER_Y = 166, 30, 202
 PREPLAY_SECONDS = 3.0
+INITIAL_SCROLL_SPEED = 30.0
 SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
-# Rows can partially enter above TOP and leave below the receptor.  Keep the
+# Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
 GRID_RECT = pygame.Rect(LANE_X - 4, 0, TILE * 3 + 8, HEIGHT)
 LEFT_HUD_RECT = pygame.Rect(20, 80, 108, 110)
@@ -333,7 +334,10 @@ class App:
         assert self.song and self.timeline
         now = self._song_time()
         preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
-        start_y = round(TOP + (PLAYER_Y - TOP) * (preplay_elapsed / PREPLAY_SECONDS))
+        # Countdown terrain moves at the song's initial speed.  That makes the
+        # start line reach the receptor after exactly three seconds without a
+        # visible speed drop when audio begins.
+        start_y = round(PLAYER_Y - (PREPLAY_SECONDS - preplay_elapsed) * INITIAL_SCROLL_SPEED)
         if self.music_started:
             distance = int(scroll_distance(now, self.song.duration))
             first_row = max(0, (PLAYER_Y + distance - HEIGHT) // TILE)
