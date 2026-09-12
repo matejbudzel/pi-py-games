@@ -47,7 +47,7 @@ STAMINA_RECT = pygame.Rect(57, 75, 14, 110)
 LEFT_HUD_RECT = pygame.Rect(43, 65, 42, 130)
 PROGRESS_RECT = pygame.Rect(307, 68, 82, 6)
 RIGHT_HUD_RECT = pygame.Rect(295, 45, 106, 48)
-RUNNER_RECT = pygame.Rect(354, 176, 44, 54)
+RUNNER_RECT = pygame.Rect(324, 176, 44, 54)
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
