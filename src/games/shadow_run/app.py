@@ -22,10 +22,8 @@ from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
-LANE_X, TILE, PLAYER_Y = 166, 30, 202
+LANE_X, TILE, PLAYER_Y = 165, 32, 202
 PREPLAY_SECONDS = 3.0
-SAFE_TILE = (37, 105, 62)       # dark grass shadow
-DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
 PREVIEW_SIZE = 128
 PREVIEW_RECT = pygame.Rect(282, 76, PREVIEW_SIZE, PREVIEW_SIZE)
@@ -34,6 +32,8 @@ MENU_BACKGROUND_PATH = Path(__file__).parent / "assets" / "menu-lawn.png"
 RESULT_FAILED_PATH = Path(__file__).parent / "assets" / "result-failed.png"
 RESULT_SUCCESS_PATH = Path(__file__).parent / "assets" / "result-success.png"
 GAMEPLAY_BACKGROUND_PATH = Path(__file__).parent / "assets" / "gameplay-lawn.png"
+TERRAIN_LAWN_PATH = Path(__file__).parent / "assets" / "terrain-lawn.png"
+PICNIC_FINISH_PATH = Path(__file__).parent / "assets" / "picnic-finish.png"
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
@@ -83,6 +83,10 @@ class App:
         self.songs = discover_songs(settings.song_directory)
         self.menu_background = self._load_menu_background()
         self.gameplay_background = self._load_scene(GAMEPLAY_BACKGROUND_PATH, (24, 58, 42))
+        self.terrain_lawn = self._load_terrain_lawn()
+        self.shadow_tiles = self._build_shadow_tiles()
+        self.preplay_safe_row = self._build_preplay_safe_row()
+        self.picnic_finish = self._load_terrain_image(PICNIC_FINISH_PATH, (GRID_RECT.width, 64), (75, 145, 68))
         self.result_failed_background = self._load_scene(RESULT_FAILED_PATH, (38, 80, 55))
         self.result_success_background = self._load_scene(RESULT_SUCCESS_PATH, (38, 80, 55))
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
@@ -118,6 +122,7 @@ class App:
         self.gameplay_base: pygame.Surface | None = None
         self.gameplay_needs_full_present = False
         self.terrain_rows: tuple[tuple[Lane, Lane], ...] = ()
+        self.terrain_row_surfaces: tuple[pygame.Surface, ...] = ()
 
     def close(self) -> None:
         if getattr(self, "song", None) is not None and not self.report_written:
@@ -254,6 +259,7 @@ class App:
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
         self.timeline.prepare_song(song.duration)
         self.terrain_rows = self.timeline.tile_stances(song.duration, TILE)
+        self.terrain_row_surfaces = self._build_terrain_row_surfaces()
         self.gameplay_base = None
         self.gameplay_needs_full_present = True
         # Decode before the start line reaches the receptor, but remain silent.
@@ -467,6 +473,76 @@ class App:
         """Keep menu art separate from gameplay and decode it only once."""
         return self._load_scene(MENU_BACKGROUND_PATH, (17, 48, 43))
 
+    def _load_terrain_image(self, path: Path, size: tuple[int, int], fallback: tuple[int, int, int]) -> pygame.Surface:
+        """Decode one small terrain asset in the canvas format at startup."""
+        image_surface = pygame.Surface(size, depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
+        try:
+            source = pygame.image.load(path)
+            converted = pygame.Surface(source.get_size(), depth=image_surface.get_bitsize(), masks=image_surface.get_masks())
+            converted.blit(source, (0, 0))
+            pygame.transform.scale(converted, size, image_surface)
+        except (OSError, pygame.error):
+            logging.getLogger(__name__).warning("Cannot load Shadow Run terrain asset %s", path)
+            image_surface.fill(fallback)
+        return image_surface
+
+    def _load_terrain_lawn(self) -> pygame.Surface:
+        return self._load_terrain_image(TERRAIN_LAWN_PATH, (TILE * 3, TILE), (104, 178, 83))
+
+    def _build_shadow_tiles(self) -> dict[int, pygame.Surface]:
+        """Cache every exposed-edge variant of a transparent shadow overlay."""
+        variants: dict[int, pygame.Surface] = {}
+        for edges in range(16):
+            shadow = pygame.Surface((TILE, TILE), pygame.SRCALPHA)
+            shadow.fill((8, 51, 35, 160))
+            for y in range(3, TILE - 3, 5):
+                for x in range((y * 3) % 7, TILE - 2, 9):
+                    shadow.set_at((x, y), (35, 91, 54, 125))
+            if edges & 1:  # top: higher-numbered future row
+                for x in range(TILE):
+                    shadow.fill((0, 0, 0, 0), (x, 0, 1, 1 + (x * 5 + 1) % 4))
+            if edges & 2:  # bottom: lower-numbered passed row
+                for x in range(TILE):
+                    depth = 1 + (x * 7 + 2) % 4
+                    shadow.fill((0, 0, 0, 0), (x, TILE - depth, 1, depth))
+            if edges & 4:
+                for y in range(TILE):
+                    shadow.fill((0, 0, 0, 0), (0, y, 1 + (y * 3 + 3) % 4, 1))
+            if edges & 8:
+                for y in range(TILE):
+                    depth = 1 + (y * 11 + 4) % 4
+                    shadow.fill((0, 0, 0, 0), (TILE - depth, y, depth, 1))
+            variants[edges] = shadow
+        return variants
+
+    def _build_preplay_safe_row(self) -> pygame.Surface:
+        row = self.terrain_lawn.copy()
+        for lane in Lane:
+            row.blit(self.shadow_tiles[0], (lane.value * TILE, 0))
+        return row
+
+    def _build_terrain_row_surfaces(self) -> tuple[pygame.Surface, ...]:
+        """Precompose fixed rows once; rendering only blits the planned map."""
+        rows: list[pygame.Surface] = []
+        for row_index, stance in enumerate(self.terrain_rows):
+            safe = set(stance)
+            row = self.terrain_lawn.copy()
+            above = set(self.terrain_rows[row_index + 1]) if row_index + 1 < len(self.terrain_rows) else set()
+            below = set(self.terrain_rows[row_index - 1]) if row_index else set()
+            for lane in safe:
+                edges = 0
+                if lane not in above:
+                    edges |= 1
+                if lane not in below:
+                    edges |= 2
+                if lane.value == 0 or Lane(lane.value - 1) not in safe:
+                    edges |= 4
+                if lane.value == 2 or Lane(lane.value + 1) not in safe:
+                    edges |= 8
+                row.blit(self.shadow_tiles[edges], (lane.value * TILE, 0))
+            rows.append(row)
+        return tuple(rows)
+
     def _load_scene(self, path: Path, fallback: tuple[int, int, int]) -> pygame.Surface:
         """Decode a logical-resolution scene once, using a safe solid fallback."""
         background = pygame.Surface((WIDTH, HEIGHT), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
@@ -542,19 +618,23 @@ class App:
             distance = int(scroll_distance(now, self.song.duration))
             first_row = max(0, (PLAYER_Y + distance - HEIGHT) // TILE)
             last_row = min(len(self.terrain_rows), (PLAYER_Y + distance + TILE) // TILE + 1)
-            rows = ((row, PLAYER_Y + distance - row * TILE, set(self.terrain_rows[row])) for row in range(first_row, last_row))
+            rows = ((row, PLAYER_Y + distance - row * TILE) for row in range(first_row, last_row))
             start_line_y = PLAYER_Y + distance
+            # The picnic is just beyond the final planned row, so its lawn
+            # first appears at the top and rolls in behind the terrain.
+            finish_y = PLAYER_Y + distance - len(self.terrain_rows) * TILE
+            if -self.picnic_finish.get_height() < finish_y < HEIGHT:
+                self.screen_surface.blit(self.picnic_finish, (GRID_RECT.x, finish_y))
         else:
             # Row zero is the start line.  Safe ground remains below it while
             # the fixed map above it approaches the player during countdown.
             rows = (
-                (row, start_line_y - row * TILE, set(Lane) if row <= 0 else set(self.terrain_rows[row]))
+                (row, start_line_y - row * TILE)
                 for row in range(-4, min(len(self.terrain_rows), 12))
             )
-        for row, y, safe in rows:
-            for lane in Lane:
-                color = SAFE_TILE if lane in safe else DANGER_TILE
-                pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
+        for row, y in rows:
+            terrain = self.preplay_safe_row if row <= 0 and not self.music_started else self.terrain_row_surfaces[row]
+            self.screen_surface.blit(terrain, (LANE_X, y))
         # Row zero is the start boundary.  It enters during countdown, crosses
         # the receptor at music start, then remains visible as it flows away.
         for lane in Lane:
