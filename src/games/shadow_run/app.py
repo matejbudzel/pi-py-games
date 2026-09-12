@@ -54,6 +54,8 @@ def visible_song_window(first_visible: int, selected: int, song_count: int) -> i
 class Screen(Enum):
     LIST = auto()
     PLAYING = auto()
+    PAUSED = auto()
+    LEAVE_CONFIRMATION = auto()
     RESULT = auto()
 
 
@@ -84,6 +86,9 @@ class App:
         self.started_at = 0.0
         self.preplay_started_at = 0.0
         self.music_started = False
+        self.pause_started_at = 0.0
+        self.leave_return_screen = Screen.PLAYING
+        self.leave_confirm_selected = False
         self.last_time = 0.0
         self.active_stance = None
         self.score = 0
@@ -163,7 +168,11 @@ class App:
                 continue
             if action is Action.SELECT:
                 if self.screen is Screen.PLAYING:
-                    pygame.mixer.music.stop(); self._write_performance_report("cancelled"); self.screen = Screen.LIST
+                    self._open_leave_confirmation()
+                elif self.screen is Screen.PAUSED:
+                    self._open_leave_confirmation()
+                elif self.screen is Screen.LEAVE_CONFIRMATION:
+                    self._cancel_leave_confirmation()
                 elif self.screen is Screen.RESULT:
                     self.screen = Screen.LIST
                 else:
@@ -176,6 +185,12 @@ class App:
                     self.selected = (self.selected + 1) % len(self.songs)
                     self.first_visible = visible_song_window(self.first_visible, self.selected, len(self.songs))
                 elif action is Action.START and self.songs: self._start(self.songs[self.selected])
+            elif self.screen is Screen.PLAYING and action is Action.START:
+                self._pause()
+            elif self.screen is Screen.PAUSED and action is Action.START:
+                self._resume()
+            elif self.screen is Screen.LEAVE_CONFIRMATION:
+                self._handle_leave_confirmation(action)
             elif self.screen is Screen.RESULT and action is Action.START:
                 self.screen = Screen.LIST
             elif self.screen is Screen.PLAYING and action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN):
@@ -207,6 +222,7 @@ class App:
         self.max_backend_present_ms = 0.0
         self.started_at = 0.0
         self.music_started = False
+        self.pause_started_at = 0.0
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
         self.timeline.prepare_song(song.duration)
         self.terrain_rows = self.timeline.tile_stances(song.duration, TILE)
@@ -215,6 +231,53 @@ class App:
         # Decode before the start line reaches the receptor, but remain silent.
         pygame.mixer.music.load(str(song.audio_path))
         self.screen = Screen.PLAYING
+
+    def _pause(self) -> None:
+        if self.screen is not Screen.PLAYING:
+            return
+        self.pause_started_at = time.monotonic()
+        if self.music_started:
+            pygame.mixer.music.pause()
+        self.screen = Screen.PAUSED
+        self.gameplay_needs_full_present = True
+
+    def _resume(self) -> None:
+        if self.screen is not Screen.PAUSED:
+            return
+        paused_for = time.monotonic() - self.pause_started_at
+        if self.music_started:
+            pygame.mixer.music.unpause()
+        else:
+            self.preplay_started_at += paused_for
+        self.screen = Screen.PLAYING
+        self.gameplay_needs_full_present = True
+
+    def _open_leave_confirmation(self) -> None:
+        self.leave_return_screen = self.screen
+        self.leave_confirm_selected = False
+        if self.screen is Screen.PLAYING:
+            self._pause()
+        self.screen = Screen.LEAVE_CONFIRMATION
+        self.gameplay_needs_full_present = True
+
+    def _cancel_leave_confirmation(self) -> None:
+        if self.leave_return_screen is Screen.PLAYING:
+            self.screen = Screen.PAUSED
+            self._resume()
+        else:
+            self.screen = self.leave_return_screen
+            self.gameplay_needs_full_present = True
+
+    def _handle_leave_confirmation(self, action: Action) -> None:
+        if action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN):
+            self.leave_confirm_selected = not self.leave_confirm_selected
+        elif action is Action.START:
+            if self.leave_confirm_selected:
+                pygame.mixer.music.stop()
+                self._write_performance_report("cancelled")
+                self.screen = Screen.LIST
+            else:
+                self._cancel_leave_confirmation()
 
     def _song_time(self) -> float:
         if not self.music_started:
@@ -317,8 +380,14 @@ class App:
             for rectangle in self._gameplay_dirty_rectangles():
                 surface.blit(self.gameplay_base, rectangle, rectangle)
         self._draw_game()
+        if self.screen is Screen.PAUSED:
+            self._draw_modal(self.settings.pause_text)
+        elif self.screen is Screen.LEAVE_CONFIRMATION:
+            self._draw_modal(self.settings.exit_confirmation_text, confirmation=True)
         if self.debug:
             surface.blit(self.font.render(f"held={','.join(sorted(self._contact_actions()))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4, 220))
+        if self.screen in (Screen.PAUSED, Screen.LEAVE_CONFIRMATION):
+            return [pygame.Rect(0, 0, WIDTH, HEIGHT)]
         if self.gameplay_needs_full_present:
             self.gameplay_needs_full_present = False
             return [pygame.Rect(0, 0, WIDTH, HEIGHT)]
@@ -335,6 +404,26 @@ class App:
         self._draw_background(base)
         pygame.draw.rect(base, (45, 12, 38), GRID_RECT)
         return base
+
+    def _draw_modal(self, message: str, confirmation: bool = False) -> None:
+        shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 165))
+        self.screen_surface.blit(shade, (0, 0))
+        frame = pygame.Rect(76, 78, 275, 84 if confirmation else 56)
+        pygame.draw.rect(self.screen_surface, (18, 35, 42), frame)
+        pygame.draw.rect(self.screen_surface, (240, 245, 255), frame, 1)
+        text = self.font.render(message, False, (255, 235, 109))
+        self.screen_surface.blit(text, text.get_rect(center=(frame.centerx, frame.y + 20)))
+        if confirmation:
+            choices = ((self.settings.exit_confirm_button, self.leave_confirm_selected), (self.settings.exit_cancel_button, not self.leave_confirm_selected))
+            x = frame.x + 54
+            for label, selected in choices:
+                color = (255, 210, 80) if selected else (225, 230, 236)
+                if selected:
+                    self.screen_surface.blit(self.font.render(">", False, color), (x - 12, frame.y + 48))
+                rendered = self.font.render(label, False, color)
+                self.screen_surface.blit(rendered, (x, frame.y + 48))
+                x += rendered.get_width() + 48
 
     def _load_menu_background(self) -> pygame.Surface:
         """Keep menu art separate from gameplay and decode it only once."""
@@ -400,7 +489,8 @@ class App:
     def _draw_game(self) -> None:
         assert self.song and self.timeline
         now = self._song_time()
-        preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
+        preplay_now = self.pause_started_at if self.screen in (Screen.PAUSED, Screen.LEAVE_CONFIRMATION) else time.monotonic()
+        preplay_elapsed = min(PREPLAY_SECONDS, preplay_now - self.preplay_started_at)
         # Countdown terrain moves at the song's initial speed.  That makes the
         # start line reach the receptor after exactly three seconds without a
         # visible speed drop when audio begins.

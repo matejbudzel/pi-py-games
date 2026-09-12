@@ -12,6 +12,7 @@ from common.input import Action, actions_from_event
 from common.console_input import KEY_SEQUENCES
 from games.shadow_run.main import command_arguments
 from games.shadow_run.app import visible_song_window
+from games.shadow_run.config import load_settings
 
 
 class CoreTests(unittest.TestCase):
@@ -27,6 +28,18 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(KEY_SEQUENCES[b"q"], Action.LEFT)
         self.assertEqual(KEY_SEQUENCES[b"x"], Action.UP)
         self.assertEqual(KEY_SEQUENCES[b"c"], Action.RIGHT)
+
+    def test_f1_uses_the_shared_select_action(self):
+        self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F1)), [Action.SELECT])
+        self.assertIs(KEY_SEQUENCES[b"\x1bOP"], Action.SELECT)
+
+    def test_pause_and_leave_text_are_configurable(self):
+        with TemporaryDirectory() as temp:
+            path = Path(temp) / "shadow-run.ini"
+            path.write_text("[gameplay]\npause_text = Stop\nexit_confirmation_text = Leave?\nexit_confirm_button = Yes\nexit_cancel_button = No\n")
+            settings = load_settings(path)
+        self.assertEqual((settings.pause_text, settings.exit_confirmation_text), ("Stop", "Leave?"))
+        self.assertEqual((settings.exit_confirm_button, settings.exit_cancel_button), ("Yes", "No"))
 
     def test_provider_runner_arguments_are_not_parsed_as_game_arguments(self):
         with patch("games.shadow_run.main.sys.argv", ["/x/runner.py", "shadow-run", "games.shadow_run.main"]):

@@ -47,6 +47,7 @@ KEY_SEQUENCES = {
     b"\n": Action.START,
     b" ": Action.START,
     b"\x1b": Action.SELECT,
+    b"\x1bOP": Action.SELECT,
     b"1": Action.DEBUG_RESULT_1,
     b"2": Action.DEBUG_RESULT_2,
     b"3": Action.DEBUG_RESULT_3,

@@ -39,6 +39,7 @@ KEY_ACTIONS = {
     pygame.K_RETURN: Action.START,
     pygame.K_SPACE: Action.START,
     pygame.K_ESCAPE: Action.SELECT,
+    pygame.K_F1: Action.SELECT,
     pygame.K_1: Action.DEBUG_RESULT_1,
     pygame.K_2: Action.DEBUG_RESULT_2,
     pygame.K_3: Action.DEBUG_RESULT_3,
