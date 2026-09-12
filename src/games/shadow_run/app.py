@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from enum import Enum, auto
+import logging
+import os
 from pathlib import Path
 import time
 
@@ -13,6 +15,7 @@ from common.console_input import ConsoleInput
 from common.display import DisplaySettings, GameDisplay, initialize_pygame
 from common.input import Action, DeviceEvent, Release, actions_from_event
 from common.joystick_input import JoystickInput
+from common.performance import FrameTiming, PerformanceTracker
 
 from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
 from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance, lane_contacts
@@ -24,6 +27,7 @@ PREPLAY_SECONDS = 3.0
 SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
+PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 
 
 def visible_song_window(first_visible: int, selected: int, song_count: int) -> int:
@@ -70,8 +74,15 @@ class App:
         self.score = 0
         self.clean_transitions = 0
         self.result_stars = 1
+        self.performance = PerformanceTracker()
+        self.max_audio_step_ms = 0.0
+        self.audio_jump_count = 0
+        self.max_boundary_lateness_ms = 0.0
+        self.report_written = False
 
     def close(self) -> None:
+        if getattr(self, "song", None) is not None and not self.report_written:
+            self._write_performance_report("interrupted")
         if pygame.mixer.get_init():
             pygame.mixer.music.stop()
         self.display.close()
@@ -81,11 +92,25 @@ class App:
         try:
             with self.console or nullcontext():
                 while self.running:
+                    frame_started = time.perf_counter()
                     self._events()
+                    input_finished = time.perf_counter()
                     self._update()
+                    update_finished = time.perf_counter()
                     self._draw()
+                    render_finished = time.perf_counter()
                     self.display.present()
+                    present_finished = time.perf_counter()
                     self.clock.tick(FPS)
+                    frame_finished = time.perf_counter()
+                    self.performance.record(FrameTiming(
+                        input_ms=(input_finished - frame_started) * 1000,
+                        update_ms=(update_finished - input_finished) * 1000,
+                        render_ms=(render_finished - update_finished) * 1000,
+                        present_ms=(present_finished - render_finished) * 1000,
+                        work_ms=(present_finished - frame_started) * 1000,
+                        frame_ms=(frame_finished - frame_started) * 1000,
+                    ))
         finally:
             self.close()
 
@@ -110,7 +135,7 @@ class App:
                 continue
             if action is Action.SELECT:
                 if self.screen is Screen.PLAYING:
-                    pygame.mixer.music.stop(); self.screen = Screen.LIST
+                    pygame.mixer.music.stop(); self._write_performance_report("cancelled"); self.screen = Screen.LIST
                 elif self.screen is Screen.RESULT:
                     self.screen = Screen.LIST
                 else:
@@ -142,6 +167,11 @@ class App:
         self.song, self.timeline = song, TerrainTimeline(song.beats, self.seed)
         self.stamina, self.score, self.clean_transitions = Stamina(), 0, 0
         self.preplay_started_at = time.monotonic()
+        self.performance = PerformanceTracker()
+        self.max_audio_step_ms = 0.0
+        self.audio_jump_count = 0
+        self.max_boundary_lateness_ms = 0.0
+        self.report_written = False
         self.started_at = 0.0
         self.music_started = False
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
@@ -169,11 +199,19 @@ class App:
             pygame.mixer.music.play()
             self.last_time = 0.0
         now = min(self.song.duration, self._song_time())
-        delta = min(0.1, max(0.0, now - self.last_time)); self.last_time = now
+        raw_audio_step = max(0.0, now - self.last_time)
+        if self.last_time > 0:
+            self.max_audio_step_ms = max(self.max_audio_step_ms, raw_audio_step * 1000)
+            if raw_audio_step > 0.125:
+                self.audio_jump_count += 1
+        delta = min(0.1, raw_audio_step); self.last_time = now
         speed = difficulty_at(now, self.song.duration).speed
         expected = self.timeline.stance_at(now)
         if expected != self.active_stance:
             self.active_stance = expected
+            change = self.timeline.latest_change_at(now)
+            if change is not None:
+                self.max_boundary_lateness_ms = max(self.max_boundary_lateness_ms, (now - change.time) * 1000)
             self.clean_transitions += 1
             self.score += 50 + self.clean_transitions * 3
         contacts = lane_contacts(self._contact_actions())
@@ -182,7 +220,24 @@ class App:
         if valid:
             self.score += int(delta * 10)
         if self.stamina.value <= 0 or now >= self.song.duration or (not pygame.mixer.music.get_busy() and now > 0.5):
-            pygame.mixer.music.stop(); self.result_stars = max(1, min(5, round(self.stamina.value / 25) + 1)); self.screen = Screen.RESULT
+            pygame.mixer.music.stop(); self.result_stars = max(1, min(5, round(self.stamina.value / 25) + 1)); self._write_performance_report("stamina" if self.stamina.value <= 0 else "complete"); self.screen = Screen.RESULT
+
+    def _write_performance_report(self, outcome: str) -> None:
+        if self.report_written:
+            return
+        self.report_written = True
+        report = self.performance.report() + (
+            f"outcome={outcome}\n"
+            f"maximum_audio_clock_step_ms={self.max_audio_step_ms:.3f}\n"
+            f"audio_clock_steps_over_125ms={self.audio_jump_count}\n"
+            f"maximum_terrain_boundary_lateness_ms={self.max_boundary_lateness_ms:.3f}\n"
+        )
+        try:
+            PERFORMANCE_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+            PERFORMANCE_REPORT_PATH.write_text(report, encoding="utf-8")
+            logging.getLogger(__name__).info("Shadow Run performance report: %s", PERFORMANCE_REPORT_PATH)
+        except OSError:
+            logging.getLogger(__name__).warning("Could not write Shadow Run performance report", exc_info=True)
 
     def _contact_actions(self) -> set[str]:
         now = time.monotonic()

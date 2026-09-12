@@ -74,6 +74,12 @@ class CoreTests(unittest.TestCase):
         planned = tuple(timeline.changes)
         self.assertEqual(tuple(timeline.changes), planned)
 
+    def test_timeline_reports_the_boundary_that_has_crossed_the_receptor(self):
+        timeline = TerrainTimeline((Beat(3.0, 1.0, True),), seed=1)
+        timeline.prepare_song(8.0)
+        self.assertIsNone(timeline.latest_change_at(2.9))
+        self.assertEqual(timeline.latest_change_at(3.1).time, 3.0)
+
     def test_difficulty_gradually_changes_multiple_values(self):
         early, late = difficulty_at(0, 100), difficulty_at(100, 100)
         self.assertLess(early.speed, late.speed)

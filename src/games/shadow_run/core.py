@@ -148,6 +148,14 @@ class TerrainTimeline:
             stance = change.stance
         return stance
 
+    def latest_change_at(self, song_time: float) -> TerrainChange | None:
+        latest = None
+        for change in self.changes:
+            if change.time > song_time:
+                break
+            latest = change
+        return latest
+
     def in_transition_window(self, song_time: float, duration: float) -> bool:
         return any(abs(change.time - song_time) <= difficulty_at(change.time, duration).transition_window for change in self.changes)
 
