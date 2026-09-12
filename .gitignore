@@ -2,6 +2,7 @@
 *.egg-info/
 __pycache__/
 *.py[cod]
+*.so
 pi-py-games.ini
 config/*.ini
 .pytest_cache/

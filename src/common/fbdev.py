@@ -10,6 +10,11 @@ from pathlib import Path
 
 import pygame
 
+try:
+    from ._fbcopy import copy_full as _copy_full_native
+except ImportError:  # Source checkouts remain usable before the extension builds.
+    _copy_full_native = None
+
 
 FBIOGET_FSCREENINFO = 0x4602
 FBIOGET_VSCREENINFO = 0x4600
@@ -117,8 +122,18 @@ class FbdevPresenter:
     def _copy_rectangles(self, surface: pygame.Surface, rectangles: list[pygame.Rect]) -> None:
         source_pitch = surface.get_pitch()
         if len(rectangles) == 1 and rectangles[0] == surface.get_rect() and source_pitch == self._line_length:
-            pixels = bytes(surface.get_view("0"))
-            self._map[self._framebuffer_offset:self._framebuffer_offset + source_pitch * surface.get_height()] = pixels
+            byte_count = source_pitch * surface.get_height()
+            if _copy_full_native is not None:
+                try:
+                    _copy_full_native(surface.get_view("0"), self._map, self._framebuffer_offset, byte_count)
+                except (BufferError, TypeError, ValueError):
+                    # A pygame build without a contiguous BufferProxy still
+                    # works through the established Python path.
+                    pixels = bytes(surface.get_view("0"))
+                    self._map[self._framebuffer_offset:self._framebuffer_offset + byte_count] = pixels
+            else:
+                pixels = bytes(surface.get_view("0"))
+                self._map[self._framebuffer_offset:self._framebuffer_offset + byte_count] = pixels
             return
         pixels = memoryview(surface.get_view("0")).cast("B")
         for rectangle in rectangles:

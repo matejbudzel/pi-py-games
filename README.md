@@ -8,7 +8,9 @@ Included games are **pi-dance**, the original small DDR-style rhythm game, **204
 
 ## Shadow Run
 
-All three games render directly to the native 854×480 game canvas on the Pi framebuffer. Shadow Run and 2048 preserve their pixel-art layout by drawing their former 427×240 coordinates at fixed 2× sizes, avoiding a full-screen runtime scale. Shadow Run uses the same shared keyboard/pad actions as the other games: arrows map to broad LEFT/CENTER/RIGHT mat lanes (Up and Down are CENTER), Enter/Space starts, and Escape returns/exits. For desktop mat simulation, hold `Q/A/Z` for left, `W/X` for centre, and `E/D/C` for right; arrows remain available. `--seed 1234 --debug` makes terrain reproducible and exposes the detected contacts.
+Pi Dance and 2048 render directly to the native 854×480 game canvas. Shadow Run keeps its 427×240 gameplay canvas and scales it 2× with nearest-neighbour pixels; this was measurably smoother on the Pi 1. Shadow Run uses the same shared keyboard/pad actions as the other games: arrows map to broad LEFT/CENTER/RIGHT mat lanes (Up and Down are CENTER), Enter/Space starts, and Escape returns/exits. For desktop mat simulation, hold `Q/A/Z` for left, `W/X` for centre, and `E/D/C` for right; arrows remain available. `--seed 1234 --debug` makes terrain reproducible and exposes the detected contacts.
+
+On installation, an optional tiny C extension removes the temporary Python `bytes` allocation used when copying a complete RGB565 frame to `/dev/fb0`. It is deliberately only an accelerator: if it cannot be compiled or loaded, the established Python copy path remains in use.
 
 It is deliberately a procedural runner rather than a fixed chart. A terrain state is a two-foot lane stance. Every normal generated change shares at least one occupied lane with its predecessor, so it never asks both feet to change lanes at once. Short transition windows forgive one or zero contacts; otherwise unsafe/missing contacts drain stamina. Valid play regenerates stamina after a short delay. The game ends at zero stamina or at natural audio completion, then keeps its star result visible until Start or Select.
 
