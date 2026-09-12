@@ -18,7 +18,7 @@ from common.joystick_input import JoystickInput
 from common.performance import FrameTiming, PerformanceTracker
 
 from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
-from .core import Lane, Stamina, Stance, TerrainTimeline, difficulty_at, is_valid_stance, scroll_distance
+from .core import Lane, Stamina, Stance, TerrainTimeline, difficulty_at, is_valid_stance, scroll_distance, time_at_scroll_distance
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
@@ -47,7 +47,7 @@ STAMINA_RECT = pygame.Rect(57, 75, 14, 110)
 LEFT_HUD_RECT = pygame.Rect(43, 65, 42, 130)
 PROGRESS_RECT = pygame.Rect(307, 68, 82, 6)
 RIGHT_HUD_RECT = pygame.Rect(295, 45, 106, 48)
-RUNNER_RECT = pygame.Rect(324, 176, 44, 54)
+RUNNER_RECT = pygame.Rect(294, 176, 44, 54)
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
@@ -93,7 +93,7 @@ class App:
         self.shadow_tiles = self._build_shadow_tiles()
         self.preplay_safe_row = self._build_preplay_safe_row()
         self.picnic_finish = self._load_terrain_image(PICNIC_FINISH_PATH, (GRID_RECT.width, 64), (75, 145, 68))
-        self.foot_ghost, self.foot_ready, self.foot_error = self._load_foot_states()
+        self.foot_ghost, self.foot_detected, self.foot_ready, self.foot_error = self._load_foot_states()
         self.runner_ready = self._load_runner(RUNNER_READY_PATH)
         self.runner_jump = self._load_runner(RUNNER_JUMP_PATH)
         self.result_failed_background = self._load_scene(RESULT_FAILED_PATH, (38, 80, 55))
@@ -132,6 +132,7 @@ class App:
         self.gameplay_needs_full_present = False
         self.terrain_rows: tuple[tuple[Lane, Lane], ...] = ()
         self.terrain_row_surfaces: tuple[pygame.Surface, ...] = ()
+        self.transition_times: tuple[float, ...] = ()
 
     def close(self) -> None:
         if getattr(self, "song", None) is not None and not self.report_written:
@@ -280,6 +281,11 @@ class App:
         self.timeline.prepare_song(song.duration)
         self.terrain_rows = self.timeline.tile_stances(song.duration, TILE)
         self.terrain_row_surfaces = self._build_terrain_row_surfaces()
+        self.transition_times = tuple(
+            time_at_scroll_distance((row - 1) * TILE, song.duration)
+            for row in range(1, len(self.terrain_rows))
+            if self.terrain_rows[row] != self.terrain_rows[row - 1]
+        )
         self.gameplay_base = None
         self.gameplay_needs_full_present = True
         # Decode before the start line reaches the receptor, but remain silent.
@@ -359,17 +365,16 @@ class App:
                 self.audio_jump_count += 1
         delta = min(0.1, raw_audio_step); self.last_time = now
         speed = difficulty_at(now, self.song.duration).speed
-        expected = self.timeline.stance_at(now)
+        expected = self._stance_at_receptor(now)
         if expected != self.active_stance:
             self.active_stance = expected
-            change = self.timeline.latest_change_at(now)
-            if change is not None:
-                self.max_boundary_lateness_ms = max(self.max_boundary_lateness_ms, (now - change.time) * 1000)
+            change_time = max((time for time in self.transition_times if time <= now), default=now)
+            self.max_boundary_lateness_ms = max(self.max_boundary_lateness_ms, (now - change_time) * 1000)
             self.clean_transitions += 1
             self.score += 50 + self.clean_transitions * 3
         contacts = self._contact_counts()
         valid = is_valid_stance(contacts, expected)
-        self.stamina.update(now, delta, valid, self.timeline.in_transition_window(now, self.song.duration))
+        self.stamina.update(now, delta, valid, self._in_transition_window(now))
         if valid:
             self.score += int(delta * 10)
         if self.stamina.value <= 0 or now >= self.song.duration or (not pygame.mixer.music.get_busy() and now > 0.5):
@@ -422,6 +427,21 @@ class App:
             else:
                 counts[Lane.CENTER] += 1
         return {lane: count for lane, count in counts.items() if count}
+
+    def _stance_at_receptor(self, song_time: float) -> Stance:
+        """Return the prebuilt row physically crossing the receptor now."""
+        if not self.terrain_rows or self.song is None:
+            return self.timeline.initial_stance if self.timeline is not None else (Lane.LEFT, Lane.CENTER)
+        distance = scroll_distance(song_time, self.song.duration)
+        row = 0 if distance < 1 else min(len(self.terrain_rows) - 1, int(distance // TILE) + 1)
+        return self.terrain_rows[row]
+
+    def _in_transition_window(self, song_time: float) -> bool:
+        assert self.song is not None
+        return any(
+            abs(change_time - song_time) <= difficulty_at(change_time, self.song.duration).transition_window
+            for change_time in self.transition_times
+        )
 
     def _draw(self) -> list[pygame.Rect] | None:
         surface = self.screen_surface
@@ -527,7 +547,7 @@ class App:
     def _load_terrain_lawn(self) -> pygame.Surface:
         return self._load_terrain_image(TERRAIN_LAWN_PATH, (TILE * 3, TILE), (104, 178, 83))
 
-    def _load_foot_states(self) -> tuple[dict[str, pygame.Surface], dict[str, pygame.Surface], dict[str, pygame.Surface]]:
+    def _load_foot_states(self) -> tuple[dict[str, pygame.Surface], dict[str, pygame.Surface], dict[str, pygame.Surface], dict[str, pygame.Surface]]:
         """Load tiny transparent feet once and cache their three display states."""
         base = {
             "left": self._load_foot(FOOT_LEFT_PATH),
@@ -535,6 +555,7 @@ class App:
         }
         return (
             {side: self._tint_foot(foot, (214, 235, 220), 120) for side, foot in base.items()},
+            {side: self._tint_foot(foot, (245, 250, 244), 255) for side, foot in base.items()},
             {side: self._tint_foot(foot, (145, 238, 165), 255) for side, foot in base.items()},
             {side: self._tint_foot(foot, (245, 85, 80), 255) for side, foot in base.items()},
         )
@@ -570,8 +591,19 @@ class App:
     def _stance_counts(stance: Stance) -> dict[Lane, int]:
         return {lane: stance.count(lane) for lane in set(stance)}
 
-    def _draw_receptors(self, required: Stance, contacts: dict[Lane, int]) -> None:
+    def _draw_receptors(self, required: Stance, contacts: dict[Lane, int], transition_open: bool) -> None:
         """Show ghosted planned feet, live correct feet, and crossed bad contacts."""
+        if transition_open:
+            # Movement is allowed here. Show only what the mat currently sees;
+            # a planned stance or error marker would be misleading mid-jump.
+            for lane, count in contacts.items():
+                x = LANE_X + lane.value * TILE + (TILE - FOOT_SIZE[0]) // 2
+                if count >= 2:
+                    self.screen_surface.blit(self.foot_detected["left"], (x, PLAYER_Y - 25))
+                    self.screen_surface.blit(self.foot_detected["right"], (x, PLAYER_Y - 3))
+                else:
+                    self.screen_surface.blit(self.foot_detected["left"], (x, PLAYER_Y - 11))
+            return
         expected = self._stance_counts(required)
         if required[0] == required[1]:
             lane = required[0]
@@ -747,7 +779,8 @@ class App:
         for lane in Lane:
             x = LANE_X + lane.value * TILE
             pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_line_y), (x + TILE, start_line_y), 2)
-        self._draw_receptors(self.timeline.stance_at(now), self._contact_counts())
+        transition_open = self._in_transition_window(now)
+        self._draw_receptors(self._stance_at_receptor(now), self._contact_counts(), transition_open)
         pygame.draw.rect(self.screen_surface, (42, 43, 43), STAMINA_RECT)
         pygame.draw.rect(self.screen_surface, (83, 220, 130), (STAMINA_RECT.x, STAMINA_RECT.bottom - int(self.stamina.value), STAMINA_RECT.width, int(self.stamina.value)))
         pygame.draw.rect(self.screen_surface, (223, 237, 205), STAMINA_RECT, 1)
@@ -756,7 +789,7 @@ class App:
         pygame.draw.rect(self.screen_surface, (255, 210, 90), (PROGRESS_RECT.x, PROGRESS_RECT.y, int(PROGRESS_RECT.width * progress), PROGRESS_RECT.height))
         score = self.font.render(str(self.score), False, (30, 68, 61))
         self.screen_surface.blit(score, score.get_rect(center=(PROGRESS_RECT.centerx, 60)))
-        runner = self.runner_jump if self.timeline.in_transition_window(now, self.song.duration) else self.runner_ready
+        runner = self.runner_jump if transition_open else self.runner_ready
         self.screen_surface.blit(runner, RUNNER_RECT)
         if not self.music_started:
             remaining = max(1, int(PREPLAY_SECONDS - preplay_elapsed - 0.001) + 1)
