@@ -29,6 +29,12 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(KEY_SEQUENCES[b"x"], Action.UP)
         self.assertEqual(KEY_SEQUENCES[b"c"], Action.RIGHT)
 
+    def test_every_outer_pad_column_maps_to_one_broad_lane(self):
+        self.assertTrue(all(actions_from_event(pygame.event.Event(pygame.JOYBUTTONDOWN, button=button)) == [Action.LEFT] for button in (6, 0, 4)))
+        self.assertTrue(all(actions_from_event(pygame.event.Event(pygame.JOYBUTTONDOWN, button=button)) == [Action.RIGHT] for button in (7, 3, 5)))
+        self.assertEqual(actions_from_event(pygame.event.Event(pygame.JOYBUTTONDOWN, button=2)), [Action.UP])
+        self.assertEqual(actions_from_event(pygame.event.Event(pygame.JOYBUTTONDOWN, button=1)), [Action.DOWN])
+
     def test_f1_uses_the_shared_select_action(self):
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F1)), [Action.SELECT])
         self.assertIs(KEY_SEQUENCES[b"\x1bOP"], Action.SELECT)

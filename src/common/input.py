@@ -61,7 +61,15 @@ class DeviceEvent(Enum):
     DISPLAY_DISCONNECTED = auto()
 
 
-PAD_ACTIONS = {0: Action.LEFT, 1: Action.DOWN, 2: Action.UP, 3: Action.RIGHT, 8: Action.START, 9: Action.SELECT}
+# WiseGroup X-PAD's 3×3 panels: 6/0/4 are its physical left column,
+# 2/1 its centre column, and 7/3/5 its right column.  The shared four-way
+# action model intentionally folds diagonal panels into their outer column.
+PAD_ACTIONS = {
+    0: Action.LEFT, 4: Action.LEFT, 6: Action.LEFT,
+    1: Action.DOWN, 2: Action.UP,
+    3: Action.RIGHT, 5: Action.RIGHT, 7: Action.RIGHT,
+    8: Action.START, 9: Action.SELECT,
+}
 DIRECTIONS = {Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN}
 
 
