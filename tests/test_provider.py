@@ -14,6 +14,8 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(document["games"][0]["id"], "pi-dance")
         self.assertEqual(document["games"][0]["command"][1:], ["-m", "pi_py_games.provider", "--config", "/games/pi-py-games.ini", "run", "pi-dance"])
         self.assertEqual(document["games"][1]["id"], "2048")
+        diagnostic = next(game for game in document["games"] if game["id"] == "fb-grid-test")
+        self.assertTrue(diagnostic["testing_tool"])
 
     def test_manifest_uses_game_configured_title(self):
         with TemporaryDirectory() as directory:

@@ -13,6 +13,7 @@ GAMES = (
     ("pi-dance", "Tancuj, tancuj, vykrúcaj!", "games.dance.main", "PI_DANCE_CONFIG", "config/dance.ini"),
     ("2048", "2048", "games.twenty48.main", "PI_2048_CONFIG", "pi-2048.ini"),
     ("shadow-run", "Shadow Run", "games.shadow_run.main", "PI_SHADOW_RUN_CONFIG", "config/shadow-run.ini"),
+    ("fb-grid-test", "Test LED framebufferu", "games.fb_grid_test.main", "PI_FB_GRID_TEST_CONFIG", "fb-grid-test.ini"),
 )
 
 
@@ -54,6 +55,7 @@ def manifest(config_path: Path | None = None) -> dict:
         "games": [{
             "id": game_id,
             "title": _game_title(config_path, game_id, title, default_config) if config_path else title,
+            "testing_tool": game_id == "fb-grid-test",
             "command": [sys.executable, "-m", "pi_py_games.provider", "--config", str(config_path) if config_path else "pi-py-games.ini", "run", game_id],
         } for game_id, title, _, _, default_config in GAMES],
     }
