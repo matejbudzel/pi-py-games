@@ -28,7 +28,9 @@ SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
-GRID_RECT = pygame.Rect(LANE_X - 4, TOP - 4, TILE * 3 + 8, 218)
+# Rows can partially enter above TOP and leave below the receptor.  Keep the
+# complete vertical lane strip dirty so no old tile edge survives a scroll.
+GRID_RECT = pygame.Rect(LANE_X - 4, 0, TILE * 3 + 8, HEIGHT)
 LEFT_HUD_RECT = pygame.Rect(20, 80, 108, 110)
 RIGHT_HUD_RECT = pygame.Rect(330, 80, 80, 24)
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
