@@ -323,12 +323,12 @@ class App:
                 # line. Above it, reveal the terrain that will arrive after
                 # music begins, giving the player time to take the first pose.
                 safe = set(Lane) if y >= start_y else set(self.timeline.stance_at(max(0.0, (start_y - y) / speed)))
-            elif y >= PLAYER_Y:
-                # Terrain which has crossed the receptor stays harmless rather
-                # than being recoloured when a new future segment is planned.
-                safe = set(Lane)
             else:
-                safe = set(self.timeline.stance_at(now + (PLAYER_Y - y) / speed))
+                terrain_time = now + (PLAYER_Y - y) / speed
+                # Negative time is the all-safe lead-in which existed below
+                # the descending start line. Afterwards every terrain band,
+                # including one that crossed the receptor, keeps flowing on.
+                safe = set(Lane) if terrain_time < 0 else set(self.timeline.stance_at(terrain_time))
             for lane in Lane:
                 color = SAFE_TILE if lane in safe else DANGER_TILE
                 pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
