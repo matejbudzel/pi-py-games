@@ -4,14 +4,14 @@ from tempfile import TemporaryDirectory
 import unittest
 
 import pygame
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts, scroll_distance, time_at_scroll_distance
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
 from common.console_input import KEY_SEQUENCES
 from games.shadow_run.main import command_arguments
-from games.shadow_run.app import App, visible_song_window
+from games.shadow_run.app import App, Screen, visible_song_window
 from games.shadow_run.config import load_settings
 
 
@@ -50,6 +50,16 @@ class CoreTests(unittest.TestCase):
     def test_f1_uses_the_shared_select_action(self):
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F1)), [Action.SELECT])
         self.assertIs(KEY_SEQUENCES[b"\x1bOP"], Action.SELECT)
+
+    def test_joystick_directions_navigate_the_song_list(self):
+        app = object.__new__(App)
+        app.console = Mock()
+        app.console.poll_actions.return_value = [Action.DOWN]
+        app.console.pad_button_events = []
+        app.console.keyboard_action_count = 0
+        app.screen, app.songs, app.selected, app.first_visible, app.running = Screen.LIST, [object(), object()], 0, 0, True
+        app._events()
+        self.assertEqual(app.selected, 1)
 
     def test_pause_and_leave_text_are_configurable(self):
         with TemporaryDirectory() as temp:

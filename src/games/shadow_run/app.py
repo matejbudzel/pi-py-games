@@ -179,7 +179,7 @@ class App:
             keyboard_action_count = self.console.keyboard_action_count
             actions = [
                 event for index, event in enumerate(console_events)
-                if isinstance(event, (Action, Release)) and (index < keyboard_action_count or not self._is_direction_input(event))
+                if isinstance(event, (Action, Release)) and (index < keyboard_action_count or self.screen is Screen.LIST or not self._is_direction_input(event))
             ]
         else:
             for event in pygame.event.get():
