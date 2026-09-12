@@ -1,6 +1,7 @@
 """Pure runner rules: safe stances, beat-led terrain, stamina and score."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 import random
@@ -29,9 +30,11 @@ def normalise_stance(lanes: tuple[Lane, Lane] | list[Lane] | set[Lane]) -> Stanc
     return (values[0], values[1])
 
 
-def is_valid_stance(contacts: set[Lane], required: Stance) -> bool:
-    """A contact may only occupy terrain that belongs to the required stance."""
-    return contacts == set(required)
+def is_valid_stance(contacts: set[Lane] | Mapping[Lane, int], required: Stance) -> bool:
+    """Require one physical contact for each foot in the planned stance."""
+    counts = dict(contacts) if isinstance(contacts, Mapping) else {lane: 1 for lane in contacts}
+    required_counts = {lane: required.count(lane) for lane in set(required)}
+    return {lane: count for lane, count in counts.items() if count > 0} == required_counts
 
 
 def is_safe_transition(current: Stance, next_stance: Stance) -> bool:

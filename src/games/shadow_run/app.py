@@ -18,7 +18,7 @@ from common.joystick_input import JoystickInput
 from common.performance import FrameTiming, PerformanceTracker
 
 from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
-from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance, lane_contacts, scroll_distance
+from .core import Lane, Stamina, Stance, TerrainTimeline, difficulty_at, is_valid_stance, scroll_distance
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
@@ -34,6 +34,9 @@ RESULT_SUCCESS_PATH = Path(__file__).parent / "assets" / "result-success.png"
 GAMEPLAY_BACKGROUND_PATH = Path(__file__).parent / "assets" / "gameplay-lawn.png"
 TERRAIN_LAWN_PATH = Path(__file__).parent / "assets" / "terrain-lawn.png"
 PICNIC_FINISH_PATH = Path(__file__).parent / "assets" / "picnic-finish.png"
+FOOT_LEFT_PATH = Path(__file__).parent / "assets" / "foot-left.png"
+FOOT_RIGHT_PATH = Path(__file__).parent / "assets" / "foot-right.png"
+FOOT_SIZE = (16, 22)
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
@@ -87,6 +90,7 @@ class App:
         self.shadow_tiles = self._build_shadow_tiles()
         self.preplay_safe_row = self._build_preplay_safe_row()
         self.picnic_finish = self._load_terrain_image(PICNIC_FINISH_PATH, (GRID_RECT.width, 64), (75, 145, 68))
+        self.foot_ghost, self.foot_ready, self.foot_error = self._load_foot_states()
         self.result_failed_background = self._load_scene(RESULT_FAILED_PATH, (38, 80, 55))
         self.result_success_background = self._load_scene(RESULT_SUCCESS_PATH, (38, 80, 55))
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
@@ -172,8 +176,11 @@ class App:
                 self._record_pad_button(button, pressed)
             if DeviceEvent.PAD_DISCONNECTED in console_events:
                 self.pad_buttons.clear()
-            actions = [event for event in console_events if isinstance(event, (Action, Release))]
             keyboard_action_count = self.console.keyboard_action_count
+            actions = [
+                event for index, event in enumerate(console_events)
+                if isinstance(event, (Action, Release)) and (index < keyboard_action_count or not self._is_direction_input(event))
+            ]
         else:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -185,7 +192,10 @@ class App:
                     if device is DeviceEvent.PAD_DISCONNECTED:
                         self.held.clear()
                         self.pad_buttons.clear()
-                actions.extend(actions_from_event(event))
+                mapped = actions_from_event(event)
+                if event.type in (pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP):
+                    mapped = [action for action in mapped if not self._is_direction_input(action)]
+                actions.extend(mapped)
         for index, action in enumerate(actions):
             if isinstance(action, Release):
                 self.held.discard(self._direction(action.action))
@@ -229,6 +239,11 @@ class App:
     @staticmethod
     def _direction(action: Action) -> str:
         return {Action.LEFT: "left", Action.RIGHT: "right", Action.UP: "up", Action.DOWN: "down"}.get(action, "")
+
+    @staticmethod
+    def _is_direction_input(action: Action | Release) -> bool:
+        direction = action.action if isinstance(action, Release) else action
+        return direction in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN)
 
     def _record_pad_button(self, button: int, pressed: bool) -> None:
         """Keep individual pad contacts through menus, pauses, and modals."""
@@ -347,7 +362,7 @@ class App:
                 self.max_boundary_lateness_ms = max(self.max_boundary_lateness_ms, (now - change.time) * 1000)
             self.clean_transitions += 1
             self.score += 50 + self.clean_transitions * 3
-        contacts = lane_contacts(self._contact_actions())
+        contacts = self._contact_counts()
         valid = is_valid_stance(contacts, expected)
         self.stamina.update(now, delta, valid, self.timeline.in_transition_window(now, self.song.duration))
         if valid:
@@ -380,10 +395,28 @@ class App:
             logging.getLogger(__name__).warning("Could not write Shadow Run performance report", exc_info=True)
 
     def _contact_actions(self) -> set[str]:
+        return {self._direction(PAD_ACTIONS[button]) for button in self.pad_buttons} | self.held | set(self.keyboard_until)
+
+    def _contact_counts(self) -> dict[Lane, int]:
         now = time.monotonic()
         self.keyboard_until = {direction: until for direction, until in self.keyboard_until.items() if until > now}
-        pad_directions = {self._direction(PAD_ACTIONS[button]) for button in self.pad_buttons}
-        return self.held | set(self.keyboard_until) | pad_directions
+        counts = {lane: 0 for lane in Lane}
+        for button in self.pad_buttons:
+            direction = self._direction(PAD_ACTIONS[button])
+            if direction == "left":
+                counts[Lane.LEFT] += 1
+            elif direction == "right":
+                counts[Lane.RIGHT] += 1
+            else:
+                counts[Lane.CENTER] += 1
+        for direction in self.held | set(self.keyboard_until):
+            if direction == "left":
+                counts[Lane.LEFT] += 1
+            elif direction == "right":
+                counts[Lane.RIGHT] += 1
+            else:
+                counts[Lane.CENTER] += 1
+        return {lane: count for lane, count in counts.items() if count}
 
     def _draw(self) -> list[pygame.Rect] | None:
         surface = self.screen_surface
@@ -488,6 +521,63 @@ class App:
 
     def _load_terrain_lawn(self) -> pygame.Surface:
         return self._load_terrain_image(TERRAIN_LAWN_PATH, (TILE * 3, TILE), (104, 178, 83))
+
+    def _load_foot_states(self) -> tuple[dict[str, pygame.Surface], dict[str, pygame.Surface], dict[str, pygame.Surface]]:
+        """Load tiny transparent feet once and cache their three display states."""
+        base = {
+            "left": self._load_foot(FOOT_LEFT_PATH),
+            "right": self._load_foot(FOOT_RIGHT_PATH),
+        }
+        return (
+            {side: self._tint_foot(foot, (214, 235, 220), 120) for side, foot in base.items()},
+            {side: self._tint_foot(foot, (145, 238, 165), 255) for side, foot in base.items()},
+            {side: self._tint_foot(foot, (245, 85, 80), 255) for side, foot in base.items()},
+        )
+
+    def _load_foot(self, path: Path) -> pygame.Surface:
+        try:
+            return pygame.transform.scale(pygame.image.load(path).convert_alpha(), FOOT_SIZE)
+        except (OSError, pygame.error):
+            logging.getLogger(__name__).warning("Cannot load Shadow Run foot %s", path)
+            foot = pygame.Surface(FOOT_SIZE, pygame.SRCALPHA)
+            pygame.draw.ellipse(foot, (230, 240, 235), foot.get_rect())
+            pygame.draw.ellipse(foot, (21, 57, 58), foot.get_rect(), 1)
+            return foot
+
+    @staticmethod
+    def _tint_foot(foot: pygame.Surface, color: tuple[int, int, int], alpha: int) -> pygame.Surface:
+        tinted = foot.copy()
+        tinted.fill(color, special_flags=pygame.BLEND_RGB_MULT)
+        tinted.set_alpha(alpha)
+        return tinted
+
+    @staticmethod
+    def _stance_counts(stance: Stance) -> dict[Lane, int]:
+        return {lane: stance.count(lane) for lane in set(stance)}
+
+    def _draw_receptors(self, required: Stance, contacts: dict[Lane, int]) -> None:
+        """Show ghosted planned feet, live correct feet, and crossed bad contacts."""
+        expected = self._stance_counts(required)
+        if required[0] == required[1]:
+            lane = required[0]
+            positions = (("left", lane, PLAYER_Y - 25), ("right", lane, PLAYER_Y - 3))
+        else:
+            positions = (("left", required[0], PLAYER_Y - 11), ("right", required[1], PLAYER_Y - 11))
+        shown = {lane: 0 for lane in Lane}
+        for side, lane, y in positions:
+            shown[lane] += 1
+            sprite = self.foot_ready[side] if contacts.get(lane, 0) >= shown[lane] else self.foot_ghost[side]
+            x = LANE_X + lane.value * TILE + (TILE - FOOT_SIZE[0]) // 2
+            self.screen_surface.blit(sprite, (x, y))
+        for lane, count in contacts.items():
+            if count <= expected.get(lane, 0):
+                continue
+            x = LANE_X + lane.value * TILE
+            y = PLAYER_Y - 11
+            self.screen_surface.blit(self.foot_error["left"], (x, y))
+            self.screen_surface.blit(self.foot_error["right"], (x + TILE - FOOT_SIZE[0], y))
+            pygame.draw.line(self.screen_surface, (255, 238, 225), (x + 2, y + 2), (x + TILE - 2, y + FOOT_SIZE[1] - 2), 1)
+            pygame.draw.line(self.screen_surface, (255, 238, 225), (x + TILE - 2, y + 2), (x + 2, y + FOOT_SIZE[1] - 2), 1)
 
     def _build_shadow_tiles(self) -> dict[int, pygame.Surface]:
         """Cache every exposed-edge variant of a transparent shadow overlay."""
@@ -640,11 +730,7 @@ class App:
         for lane in Lane:
             x = LANE_X + lane.value * TILE
             pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_line_y), (x + TILE, start_line_y), 2)
-        contacts = lane_contacts(self._contact_actions())
-        for lane in Lane:
-            receptor = pygame.Rect(LANE_X + lane.value * TILE + 3, PLAYER_Y - 6, TILE - 6, 12)
-            pygame.draw.rect(self.screen_surface, (255, 226, 100) if lane in contacts else (31, 43, 68), receptor)
-            pygame.draw.rect(self.screen_surface, (240, 245, 255), receptor, 1)
+        self._draw_receptors(self.timeline.stance_at(now), self._contact_counts())
         pygame.draw.rect(self.screen_surface, (42, 43, 43), STAMINA_RECT)
         pygame.draw.rect(self.screen_surface, (83, 220, 130), (STAMINA_RECT.x, STAMINA_RECT.bottom - int(self.stamina.value), STAMINA_RECT.width, int(self.stamina.value)))
         pygame.draw.rect(self.screen_surface, (223, 237, 205), STAMINA_RECT, 1)

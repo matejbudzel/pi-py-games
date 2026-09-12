@@ -77,6 +77,10 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(is_valid_stance({Lane.LEFT, Lane.CENTER}, (Lane.LEFT, Lane.CENTER)))
         self.assertFalse(is_valid_stance({Lane.LEFT, Lane.CENTER, Lane.RIGHT}, (Lane.LEFT, Lane.CENTER)))
 
+    def test_single_lane_stance_requires_two_physical_contacts(self):
+        self.assertFalse(is_valid_stance({Lane.LEFT: 1}, (Lane.LEFT, Lane.LEFT)))
+        self.assertTrue(is_valid_stance({Lane.LEFT: 2}, (Lane.LEFT, Lane.LEFT)))
+
     def test_generator_never_demands_two_feet_move(self):
         generator = TerrainGenerator(seed=4)
         old = generator.stance
