@@ -12,6 +12,8 @@ Pi Dance and 2048 render directly to the native 854×480 game canvas. Shadow Run
 
 On installation, an optional tiny C extension removes the temporary Python `bytes` allocation used when copying a complete RGB565 frame to `/dev/fb0`. It is deliberately only an accelerator: if it cannot be compiled or loaded, the established Python copy path remains in use.
 
+For Pi deployment builds, `scripts/cross-build-fbcopy.sh` reuses the sibling launcher's Pi ARMv6 sysroot. Run the launcher's sysroot sync after installing target development headers, then run the script; it emits the target `.so` under `src/common/` for deployment.
+
 It is deliberately a procedural runner rather than a fixed chart. A terrain state is a two-foot lane stance. Every normal generated change shares at least one occupied lane with its predecessor, so it never asks both feet to change lanes at once. Short transition windows forgive one or zero contacts; otherwise unsafe/missing contacts drain stamina. Valid play regenerates stamina after a short delay. The game ends at zero stamina or at natural audio completion, then keeps its star result visible until Start or Select.
 
 Songs are external recursive `*.wav` files paired with `*.shadow.json`; songs missing a valid, current sidecar are hidden. Prepare on a desktop, never on the Pi:
