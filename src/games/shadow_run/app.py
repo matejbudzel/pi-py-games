@@ -24,7 +24,6 @@ from .songs import Song, discover_songs
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
 LANE_X, TILE, PLAYER_Y = 166, 30, 202
 PREPLAY_SECONDS = 3.0
-INITIAL_SCROLL_SPEED = 30.0
 SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
@@ -337,23 +336,30 @@ class App:
         # Countdown terrain moves at the song's initial speed.  That makes the
         # start line reach the receptor after exactly three seconds without a
         # visible speed drop when audio begins.
-        start_y = round(PLAYER_Y - (PREPLAY_SECONDS - preplay_elapsed) * INITIAL_SCROLL_SPEED)
+        initial_speed = difficulty_at(0.0, self.song.duration).speed
+        start_line_y = round(PLAYER_Y - (PREPLAY_SECONDS - preplay_elapsed) * initial_speed)
         if self.music_started:
             distance = int(scroll_distance(now, self.song.duration))
             first_row = max(0, (PLAYER_Y + distance - HEIGHT) // TILE)
             last_row = min(len(self.terrain_rows), (PLAYER_Y + distance + TILE) // TILE + 1)
             rows = ((row, PLAYER_Y + distance - row * TILE, set(self.terrain_rows[row])) for row in range(first_row, last_row))
+            start_line_y = PLAYER_Y + distance
         else:
             # Row zero is the start line.  Safe ground remains below it while
             # the fixed map above it approaches the player during countdown.
             rows = (
-                (row, start_y - row * TILE, set(Lane) if row <= 0 else set(self.terrain_rows[row]))
-                for row in range(-3, min(len(self.terrain_rows), 9))
+                (row, start_line_y - row * TILE, set(Lane) if row <= 0 else set(self.terrain_rows[row]))
+                for row in range(-4, min(len(self.terrain_rows), 12))
             )
         for row, y, safe in rows:
             for lane in Lane:
                 color = SAFE_TILE if lane in safe else DANGER_TILE
                 pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
+        # Row zero is the start boundary.  It enters during countdown, crosses
+        # the receptor at music start, then remains visible as it flows away.
+        for lane in Lane:
+            x = LANE_X + lane.value * TILE
+            pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_line_y), (x + TILE, start_line_y), 2)
         contacts = lane_contacts(self._contact_actions())
         for lane in Lane:
             receptor = pygame.Rect(LANE_X + lane.value * TILE + 3, PLAYER_Y - 6, TILE - 6, 12)
@@ -367,9 +373,6 @@ class App:
         if self.timeline.in_transition_window(now, self.song.duration):
             pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)
         if not self.music_started:
-            for lane in Lane:
-                x = LANE_X + lane.value * TILE
-                pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_y), (x + TILE, start_y), 2)
             remaining = max(1, int(PREPLAY_SECONDS - preplay_elapsed - 0.001) + 1)
             countdown = self.big_font.render(str(remaining), False, (255, 235, 109))
             self.screen_surface.blit(countdown, countdown.get_rect(center=(WIDTH // 2, 70)))
