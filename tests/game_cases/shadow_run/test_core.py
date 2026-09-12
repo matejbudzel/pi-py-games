@@ -6,7 +6,7 @@ import unittest
 import pygame
 from unittest.mock import patch
 
-from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts
+from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
 from games.shadow_run.main import command_arguments
@@ -47,6 +47,13 @@ class CoreTests(unittest.TestCase):
         generator = TerrainGenerator((Beat(3.0, 1.0, True),), seed=1)
         self.assertIsNone(generator.advance(1.0, 30))
         self.assertIsNotNone(generator.advance(3.0, 30))
+
+    def test_timeline_plans_future_change_without_activating_it_early(self):
+        timeline = TerrainTimeline((Beat(3.0, 1.0, True),), seed=1)
+        timeline.plan_to(4.0, 30)
+        self.assertEqual(timeline.stance_at(2.0), (Lane.LEFT, Lane.CENTER))
+        self.assertNotEqual(timeline.stance_at(3.1), (Lane.LEFT, Lane.CENTER))
+        self.assertTrue(timeline.in_transition_window(3.0, 30))
 
     def test_difficulty_gradually_changes_multiple_values(self):
         early, late = difficulty_at(0, 100), difficulty_at(100, 100)

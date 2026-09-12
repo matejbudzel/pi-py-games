@@ -15,7 +15,7 @@ from common.input import Action, DeviceEvent, Release, actions_from_event
 from common.joystick_input import JoystickInput
 
 from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
-from .core import Lane, Stamina, TerrainGenerator, difficulty_at, is_valid_stance, lane_contacts
+from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance, lane_contacts
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
@@ -44,11 +44,11 @@ class App:
         self.selected, self.screen, self.running = 0, Screen.LIST, True
         self.held: set[str] = set()
         self.song: Song | None = None
-        self.generator: TerrainGenerator | None = None
+        self.timeline: TerrainTimeline | None = None
         self.stamina = Stamina()
         self.started_at = 0.0
         self.last_time = 0.0
-        self.transition_until = 0.0
+        self.active_stance = None
         self.score = 0
         self.clean_transitions = 0
         self.result_stars = 1
@@ -109,9 +109,9 @@ class App:
         return {Action.LEFT: "left", Action.RIGHT: "right", Action.UP: "up", Action.DOWN: "down"}.get(action, "")
 
     def _start(self, song: Song) -> None:
-        self.song, self.generator = song, TerrainGenerator(song.beats, self.seed)
+        self.song, self.timeline = song, TerrainTimeline(song.beats, self.seed)
         self.stamina, self.score, self.clean_transitions = Stamina(), 0, 0
-        self.started_at = time.monotonic(); self.last_time = 0.0; self.transition_until = 0.0; self.held.clear()
+        self.started_at = time.monotonic(); self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear()
         pygame.mixer.music.load(str(song.audio_path)); pygame.mixer.music.play()
         self.screen = Screen.PLAYING
 
@@ -122,19 +122,22 @@ class App:
         return max(0.0, (position / 1000 if position >= 0 else fallback) + self.settings.timing_offset_ms / 1000)
 
     def _update(self) -> None:
-        if self.screen is not Screen.PLAYING or self.song is None or self.generator is None:
+        if self.screen is not Screen.PLAYING or self.song is None or self.timeline is None:
             return
         now = min(self.song.duration, self._song_time())
         delta = min(0.1, max(0.0, now - self.last_time)); self.last_time = now
-        changed = self.generator.advance(now, self.song.duration)
-        if changed is not None:
-            self.transition_until = now + difficulty_at(now, self.song.duration).transition_window
+        # Six seconds of look-ahead lets a new safe stance travel visibly from
+        # the top of the waterfall to the receptor before it becomes required.
+        speed = difficulty_at(now, self.song.duration).speed
+        self.timeline.plan_to(now + (PLAYER_Y - TOP) / speed + 0.5, self.song.duration)
+        expected = self.timeline.stance_at(now)
+        if expected != self.active_stance:
+            self.active_stance = expected
             self.clean_transitions += 1
             self.score += 50 + self.clean_transitions * 3
         contacts = lane_contacts(self.held)
-        expected = set(self.generator.stance)
-        valid = is_valid_stance(contacts, self.generator.stance)
-        self.stamina.update(now, delta, valid, now < self.transition_until)
+        valid = is_valid_stance(contacts, expected)
+        self.stamina.update(now, delta, valid, self.timeline.in_transition_window(now, self.song.duration))
         if valid:
             self.score += int(delta * 10)
         if self.stamina.value <= 0 or now >= self.song.duration or (not pygame.mixer.music.get_busy() and now > 0.5):
@@ -166,19 +169,25 @@ class App:
         else:
             self._draw_game(font)
         if self.debug:
-            surface.blit(font.render(f"held={','.join(sorted(self.held))} stance={self.generator.stance if self.generator else ''}", False, (255, 255, 255)), (4, 220))
+            surface.blit(font.render(f"held={','.join(sorted(self.held))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4, 220))
 
     def _draw_game(self, font: pygame.font.Font) -> None:
-        assert self.song and self.generator
-        # Generic DANGER terrain with a safe current stance; theme colour varies by song.
+        assert self.song and self.timeline
+        now = self._song_time()
+        speed = difficulty_at(now, self.song.duration).speed
+        # The row offset advances every frame. Each row asks the planned
+        # timeline which stance it will require when it reaches the receptor.
         pygame.draw.rect(self.screen_surface, (45, 12, 38), (LANE_X - 4, TOP - 4, TILE * 3 + 8, 218))
-        safe = set(self.generator.stance)
-        for row in range(7):
-            y = TOP + row * TILE
+        offset = int(now * speed) % TILE
+        for row in range(-1, 8):
+            y = TOP + offset + row * TILE
+            reaches_receptor_at = now + (PLAYER_Y - y) / speed
+            safe = set(self.timeline.stance_at(max(0.0, reaches_receptor_at)))
             for lane in Lane:
-                color = (242, 98, 59) if lane not in safe else (78, 190, 132)
+                tile_phase = (row + lane.value) % 3
+                color = ((238, 78, 51), (242, 98, 59), (255, 121, 58))[tile_phase] if lane not in safe else ((63, 174, 126), (78, 190, 132), (91, 203, 141))[tile_phase]
                 pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
-                pygame.draw.rect(self.screen_surface, (255, 174, 69) if lane not in safe else (164, 236, 143), (LANE_X + lane.value * TILE + 5, y + 5, 5, 3))
+                pygame.draw.rect(self.screen_surface, (255, 174, 69) if lane not in safe else (164, 236, 143), (LANE_X + lane.value * TILE + 5 + tile_phase * 3, y + 5, 5, 3))
         for lane in Lane:
             pygame.draw.rect(self.screen_surface, (240, 245, 255), (LANE_X + lane.value * TILE + 4, PLAYER_Y, TILE - 8, 5))
         pygame.draw.rect(self.screen_surface, (220, 55, 83), (20, 80, 14, 110))
@@ -186,5 +195,5 @@ class App:
         progress = self._song_time() / self.song.duration
         pygame.draw.rect(self.screen_surface, (70, 80, 114), (48, 80, 80, 6)); pygame.draw.rect(self.screen_surface, (255, 210, 90), (48, 80, int(80 * progress), 6))
         self.screen_surface.blit(font.render(str(self.score), False, (255, 230, 135)), (330, 80))
-        if self._song_time() < self.transition_until:
+        if self.timeline.in_transition_window(now, self.song.duration):
             pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)

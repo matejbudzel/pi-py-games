@@ -107,6 +107,40 @@ class TerrainGenerator:
         return self.stance
 
 
+@dataclass(frozen=True)
+class TerrainChange:
+    time: float
+    stance: Stance
+
+
+class TerrainTimeline:
+    """Plans terrain ahead of the receptor without changing the active stance early."""
+    def __init__(self, beats: tuple[Beat, ...] = (), seed: int | None = None) -> None:
+        self.generator = TerrainGenerator(beats, seed)
+        self.initial_stance = self.generator.stance
+        self.changes: list[TerrainChange] = []
+        self.planned_until = 0.0
+
+    def plan_to(self, horizon: float, duration: float) -> None:
+        """Fill a look-ahead horizon in small deterministic time increments."""
+        while self.planned_until < horizon:
+            self.planned_until = min(horizon, self.planned_until + 0.10)
+            stance = self.generator.advance(self.planned_until, duration)
+            if stance is not None:
+                self.changes.append(TerrainChange(self.generator.last_change, stance))
+
+    def stance_at(self, song_time: float) -> Stance:
+        stance = self.initial_stance
+        for change in self.changes:
+            if change.time > song_time:
+                break
+            stance = change.stance
+        return stance
+
+    def in_transition_window(self, song_time: float, duration: float) -> bool:
+        return any(abs(change.time - song_time) <= difficulty_at(change.time, duration).transition_window for change in self.changes)
+
+
 @dataclass
 class Stamina:
     value: float = 100.0
