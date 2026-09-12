@@ -378,6 +378,10 @@ class App:
         if self.gameplay_base is None:
             self.gameplay_base = self._create_gameplay_base()
             surface.blit(self.gameplay_base, (0, 0))
+        elif self.gameplay_needs_full_present:
+            # A modal shades the whole logical canvas. Restore every pixel
+            # once on both entry and dismissal before dirty updates resume.
+            surface.blit(self.gameplay_base, (0, 0))
         else:
             for rectangle in self._gameplay_dirty_rectangles():
                 surface.blit(self.gameplay_base, rectangle, rectangle)
