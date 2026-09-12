@@ -15,6 +15,11 @@ try:
 except ImportError:  # Source checkouts remain usable before the extension builds.
     _copy_full_native = None
 
+try:
+    from ._fbcopy import copy_rectangle as _copy_rectangle_native
+except ImportError:  # Older deployed accelerators only provide full copies.
+    _copy_rectangle_native = None
+
 
 FBIOGET_FSCREENINFO = 0x4602
 FBIOGET_VSCREENINFO = 0x4600
@@ -135,6 +140,18 @@ class FbdevPresenter:
                 pixels = bytes(surface.get_view("0"))
                 self._map[self._framebuffer_offset:self._framebuffer_offset + byte_count] = pixels
             return
+        if _copy_rectangle_native is not None:
+            try:
+                source = surface.get_view("0")
+                for rectangle in rectangles:
+                    _copy_rectangle_native(
+                        source, self._map, self._framebuffer_offset,
+                        source_pitch, self._line_length, rectangle.x, rectangle.y,
+                        rectangle.width, rectangle.height, self._bytes_per_pixel,
+                    )
+                return
+            except (BufferError, TypeError, ValueError):
+                pass
         pixels = memoryview(surface.get_view("0")).cast("B")
         for rectangle in rectangles:
             row_width = rectangle.width * self._bytes_per_pixel

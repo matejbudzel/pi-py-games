@@ -112,9 +112,7 @@ class App:
                     update_finished = time.perf_counter()
                     dirty_rectangles = self._draw()
                     render_finished = time.perf_counter()
-                    # On Pi 1 fbdev, a full contiguous mmap copy is faster
-                    # than hundreds of Python row copies for scaled dirty rects.
-                    self.display.present(None if self.platform.backend == "fbdev" else dirty_rectangles)
+                    self.display.present(dirty_rectangles)
                     present_finished = time.perf_counter()
                     self.presentation_frames += 1
                     self.total_scale_ms += self.display.last_scale_ms

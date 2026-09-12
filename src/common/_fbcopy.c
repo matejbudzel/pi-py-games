@@ -37,8 +37,56 @@ static PyObject *copy_full(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static PyObject *copy_rectangle(PyObject *self, PyObject *args) {
+    PyObject *source_object;
+    PyObject *destination_object;
+    Py_ssize_t destination_offset, source_pitch, destination_pitch;
+    Py_ssize_t x, y, width, height, bytes_per_pixel;
+    Py_buffer source = {0};
+    Py_buffer destination = {0};
+
+    if (!PyArg_ParseTuple(args, "OO" "nnnnnnnn", &source_object, &destination_object,
+                          &destination_offset, &source_pitch, &destination_pitch,
+                          &x, &y, &width, &height, &bytes_per_pixel)) {
+        return NULL;
+    }
+    if (destination_offset < 0 || source_pitch <= 0 || destination_pitch <= 0 ||
+        x < 0 || y < 0 || width < 0 || height < 0 || bytes_per_pixel <= 0) {
+        PyErr_SetString(PyExc_ValueError, "invalid framebuffer rectangle");
+        return NULL;
+    }
+    if (PyObject_GetBuffer(source_object, &source, PyBUF_CONTIG_RO) < 0) {
+        return NULL;
+    }
+    if (PyObject_GetBuffer(destination_object, &destination, PyBUF_CONTIG | PyBUF_WRITABLE) < 0) {
+        PyBuffer_Release(&source);
+        return NULL;
+    }
+    Py_ssize_t row_width = width * bytes_per_pixel;
+    Py_ssize_t source_start = y * source_pitch + x * bytes_per_pixel;
+    Py_ssize_t destination_start = destination_offset + y * destination_pitch + x * bytes_per_pixel;
+    if (row_width < 0 || source_start < 0 || destination_start < 0 ||
+        height > 0 && (source_start > source.len - row_width ||
+                       (height - 1) > (source.len - source_start - row_width) / source_pitch ||
+                       destination_start > destination.len - row_width ||
+                       (height - 1) > (destination.len - destination_start - row_width) / destination_pitch)) {
+        PyBuffer_Release(&destination);
+        PyBuffer_Release(&source);
+        PyErr_SetString(PyExc_ValueError, "rectangle exceeds source or destination buffer");
+        return NULL;
+    }
+    for (Py_ssize_t row = 0; row < height; ++row) {
+        memcpy((char *)destination.buf + destination_start + row * destination_pitch,
+               (char *)source.buf + source_start + row * source_pitch, (size_t)row_width);
+    }
+    PyBuffer_Release(&destination);
+    PyBuffer_Release(&source);
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef methods[] = {
     {"copy_full", copy_full, METH_VARARGS, "Copy a contiguous source buffer directly into a destination buffer."},
+    {"copy_rectangle", copy_rectangle, METH_VARARGS, "Copy a rectangle between pitched buffers."},
     {NULL, NULL, 0, NULL},
 };
 
