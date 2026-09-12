@@ -58,6 +58,7 @@ class App:
         self.songs = discover_songs(settings.song_directory)
         self.selected, self.first_visible, self.screen, self.running = 0, 0, Screen.LIST, True
         self.held: set[str] = set()
+        self.keyboard_until: dict[str, float] = {}
         self.song: Song | None = None
         self.timeline: TerrainTimeline | None = None
         self.stamina = Stamina()
@@ -90,8 +91,10 @@ class App:
 
     def _events(self) -> None:
         actions: list[Action | Release] = []
+        keyboard_action_count = 0
         if self.console:
             actions = [event for event in self.console.poll_actions() if isinstance(event, (Action, Release))]
+            keyboard_action_count = self.console.keyboard_action_count
         else:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -101,7 +104,7 @@ class App:
                     if device is DeviceEvent.PAD_DISCONNECTED:
                         self.held.clear()
                 actions.extend(actions_from_event(event))
-        for action in actions:
+        for index, action in enumerate(actions):
             if isinstance(action, Release):
                 self.held.discard(self._direction(action.action))
                 continue
@@ -123,7 +126,13 @@ class App:
             elif self.screen is Screen.RESULT and action is Action.START:
                 self.screen = Screen.LIST
             elif self.screen is Screen.PLAYING and action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN):
-                self.held.add(self._direction(action))
+                direction = self._direction(action)
+                if index < keyboard_action_count:
+                    # A Linux TTY has no key-up events. Make each debug key
+                    # press a visible short contact while pad buttons remain held.
+                    self.keyboard_until[direction] = time.monotonic() + 0.45
+                else:
+                    self.held.add(direction)
 
     @staticmethod
     def _direction(action: Action) -> str:
@@ -135,7 +144,7 @@ class App:
         self.preplay_started_at = time.monotonic()
         self.started_at = 0.0
         self.music_started = False
-        self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear()
+        self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
         # Decode before the start line reaches the receptor, but remain silent.
         pygame.mixer.music.load(str(song.audio_path))
         self.screen = Screen.PLAYING
@@ -152,6 +161,8 @@ class App:
         if self.screen is not Screen.PLAYING or self.song is None or self.timeline is None:
             return
         if not self.music_started:
+            speed = difficulty_at(0, self.song.duration).speed
+            self.timeline.plan_to((PLAYER_Y - TOP) / speed + 0.5, self.song.duration)
             if time.monotonic() - self.preplay_started_at < PREPLAY_SECONDS:
                 return
             self.started_at = time.monotonic()
@@ -169,13 +180,18 @@ class App:
             self.active_stance = expected
             self.clean_transitions += 1
             self.score += 50 + self.clean_transitions * 3
-        contacts = lane_contacts(self.held)
+        contacts = lane_contacts(self._contact_actions())
         valid = is_valid_stance(contacts, expected)
         self.stamina.update(now, delta, valid, self.timeline.in_transition_window(now, self.song.duration))
         if valid:
             self.score += int(delta * 10)
         if self.stamina.value <= 0 or now >= self.song.duration or (not pygame.mixer.music.get_busy() and now > 0.5):
             pygame.mixer.music.stop(); self.result_stars = max(1, min(5, round(self.stamina.value / 25) + 1)); self.screen = Screen.RESULT
+
+    def _contact_actions(self) -> set[str]:
+        now = time.monotonic()
+        self.keyboard_until = {direction: until for direction, until in self.keyboard_until.items() if until > now}
+        return self.held | set(self.keyboard_until)
 
     def _draw(self) -> None:
         surface = self.screen_surface
@@ -204,7 +220,7 @@ class App:
         else:
             self._draw_game(font)
         if self.debug:
-            surface.blit(font.render(f"held={','.join(sorted(self.held))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4, 220))
+            surface.blit(font.render(f"held={','.join(sorted(self._contact_actions()))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4, 220))
 
     def _draw_game(self, font: pygame.font.Font) -> None:
         assert self.song and self.timeline
@@ -216,14 +232,24 @@ class App:
         preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
         scroll_time = now if self.music_started else preplay_elapsed
         offset = int(scroll_time * speed) % TILE
+        start_y = round(TOP + (PLAYER_Y - TOP) * (preplay_elapsed / PREPLAY_SECONDS))
         for row in range(-1, 8):
             y = TOP + offset + row * TILE
-            reaches_receptor_at = now + (PLAYER_Y - y) / speed
-            safe = set(Lane) if not self.music_started else set(self.timeline.stance_at(max(0.0, reaches_receptor_at)))
+            if not self.music_started:
+                # Safe terrain has already flowed below the descending start
+                # line. Above it, reveal the terrain that will arrive after
+                # music begins, giving the player time to take the first pose.
+                safe = set(Lane) if y >= start_y else set(self.timeline.stance_at(max(0.0, (start_y - y) / speed)))
+            elif y >= PLAYER_Y:
+                # Terrain which has crossed the receptor stays harmless rather
+                # than being recoloured when a new future segment is planned.
+                safe = set(Lane)
+            else:
+                safe = set(self.timeline.stance_at(now + (PLAYER_Y - y) / speed))
             for lane in Lane:
                 color = SAFE_TILE if lane in safe else DANGER_TILE
                 pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
-        contacts = lane_contacts(self.held)
+        contacts = lane_contacts(self._contact_actions())
         for lane in Lane:
             receptor = pygame.Rect(LANE_X + lane.value * TILE + 3, PLAYER_Y - 6, TILE - 6, 12)
             pygame.draw.rect(self.screen_surface, (255, 226, 100) if lane in contacts else (31, 43, 68), receptor)
@@ -238,7 +264,6 @@ class App:
         if not self.music_started:
             # A striped line visibly flows from the top to the receptor during
             # the silent grace period and becomes the first terrain boundary.
-            start_y = round(TOP + (PLAYER_Y - TOP) * (preplay_elapsed / PREPLAY_SECONDS))
             for lane in Lane:
                 x = LANE_X + lane.value * TILE
                 pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_y), (x + TILE, start_y), 2)

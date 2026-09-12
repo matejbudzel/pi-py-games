@@ -25,6 +25,15 @@ PAD_DEVICE_NAME = "WiseGroup.,Ltd X-PAD, Extreme Dance Pad"
 INPUT_STATUS_PATH = Path("/tmp/pi-py-games-input.txt")
 
 KEY_SEQUENCES = {
+    # Three-column keyboard mat for framebuffer/TTY development.
+    b"q": Action.LEFT,
+    b"a": Action.LEFT,
+    b"z": Action.LEFT,
+    b"w": Action.UP,
+    b"x": Action.UP,
+    b"e": Action.RIGHT,
+    b"d": Action.RIGHT,
+    b"c": Action.RIGHT,
     b"\x1b[A": Action.UP,
     b"\x1bOA": Action.UP,
     b"\x1b[B": Action.DOWN,
@@ -86,7 +95,11 @@ class ConsoleInput:
             sys.stdout.flush()
 
     def poll_actions(self) -> list[Action | Release | DeviceEvent]:
-        actions: list[Action | Release | DeviceEvent] = list(self._read_keyboard_actions())
+        keyboard_actions = self._read_keyboard_actions()
+        # Consumers which need hold-like keyboard debug input can distinguish
+        # these terminal presses from joystick button events (which follow).
+        self.keyboard_action_count = len(keyboard_actions)
+        actions: list[Action | Release | DeviceEvent] = list(keyboard_actions)
         if actions:
             self._keyboard_events.extend(action.name for action in actions if isinstance(action, Action))
             self._keyboard_events = self._keyboard_events[-30:]

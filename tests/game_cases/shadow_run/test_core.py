@@ -9,6 +9,7 @@ from unittest.mock import patch
 from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
+from common.console_input import KEY_SEQUENCES
 from games.shadow_run.main import command_arguments
 from games.shadow_run.app import visible_song_window
 
@@ -21,6 +22,11 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_q)), [Action.LEFT])
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_x)), [Action.UP])
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c)), [Action.RIGHT])
+
+    def test_framebuffer_keyboard_uses_the_same_three_column_layout(self):
+        self.assertEqual(KEY_SEQUENCES[b"q"], Action.LEFT)
+        self.assertEqual(KEY_SEQUENCES[b"x"], Action.UP)
+        self.assertEqual(KEY_SEQUENCES[b"c"], Action.RIGHT)
 
     def test_provider_runner_arguments_are_not_parsed_as_game_arguments(self):
         with patch("games.shadow_run.main.sys.argv", ["/x/runner.py", "shadow-run", "games.shadow_run.main"]):
