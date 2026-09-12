@@ -4,10 +4,12 @@ from tempfile import TemporaryDirectory
 import unittest
 
 import pygame
+from unittest.mock import patch
 
 from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
+from games.shadow_run.main import command_arguments
 
 
 class CoreTests(unittest.TestCase):
@@ -18,6 +20,11 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_q)), [Action.LEFT])
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_x)), [Action.UP])
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c)), [Action.RIGHT])
+
+    def test_provider_runner_arguments_are_not_parsed_as_game_arguments(self):
+        with patch("games.shadow_run.main.sys.argv", ["/x/runner.py", "shadow-run", "games.shadow_run.main"]):
+            self.assertEqual(command_arguments(), [])
+        self.assertEqual(command_arguments(["--seed", "4"]), ["--seed", "4"])
 
     def test_transitions_keep_a_lane_occupied(self):
         self.assertTrue(is_safe_transition((Lane.LEFT, Lane.CENTER), (Lane.CENTER, Lane.RIGHT)))
