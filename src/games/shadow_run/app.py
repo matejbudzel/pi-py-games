@@ -68,6 +68,7 @@ class App:
         self.joystick = JoystickInput() if self.platform.backend == "pygame" else None
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
+        self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
         self.selected, self.first_visible, self.screen, self.running = 0, 0, Screen.LIST, True
         self.held: set[str] = set()
         self.keyboard_until: dict[str, float] = {}
@@ -289,7 +290,10 @@ class App:
                 y = 52 + row * 18
                 if index == self.selected: surface.blit(self.font.render(">", False, (255, 210, 80)), (20, y))
                 surface.blit(self.font.render(song.title[:27], False, (240, 242, 255)), (34, y))
-                surface.blit(self.font.render(f"{song.duration:.0f}s {song.tempo_bpm:.0f}", False, (140, 180, 210)), (286, y))
+            if self.songs:
+                preview = self.song_covers[self.songs[self.selected].audio_path]
+                pygame.draw.rect(surface, (255, 225, 122), (340, 88, 68, 68), 1)
+                surface.blit(preview, (342, 90))
             return None
         if self.screen is Screen.RESULT:
             self._draw_background(surface)
@@ -322,6 +326,24 @@ class App:
         self._draw_background(base)
         pygame.draw.rect(base, (45, 12, 38), GRID_RECT)
         return base
+
+    def _load_cover_preview(self, song: Song) -> pygame.Surface:
+        """Load once at menu startup; missing covers get original pixel art."""
+        preview = pygame.Surface((64, 64), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
+        if song.cover_path is not None:
+            try:
+                cover = pygame.image.load(song.cover_path)
+                converted = pygame.Surface(cover.get_size(), depth=preview.get_bitsize(), masks=preview.get_masks())
+                converted.blit(cover, (0, 0))
+                return pygame.transform.scale(converted, preview.get_size())
+            except (OSError, pygame.error):
+                logging.getLogger(__name__).warning("Cannot load song cover %s", song.cover_path)
+        hue = sum(song.title.encode("utf-8")) % 80
+        preview.fill((35 + hue // 3, 45, 92 + hue))
+        pygame.draw.rect(preview, (255, 225, 122), (4, 4, 56, 56), 2)
+        pygame.draw.circle(preview, (80, 210, 150), (32, 28), 14)
+        pygame.draw.rect(preview, (50, 125, 90), (10, 46, 44, 10))
+        return preview
 
     def _gameplay_dirty_rectangles(self) -> list[pygame.Rect]:
         rectangles = [GRID_RECT, LEFT_HUD_RECT, RIGHT_HUD_RECT]

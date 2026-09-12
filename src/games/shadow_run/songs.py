@@ -17,6 +17,7 @@ class Song:
     title: str
     audio_path: Path
     sidecar_path: Path
+    cover_path: Path | None
     duration: float
     tempo_bpm: float
     beats: tuple[Beat, ...]
@@ -40,7 +41,7 @@ def load_song(audio: Path) -> Song | None:
             return None
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return None
-    return Song(_title_for(audio, document), audio, sidecar_path_for(audio), duration, tempo, beats)
+    return Song(_title_for(audio, document), audio, sidecar_path_for(audio), _cover_path_for(audio), duration, tempo, beats)
 
 
 def _title_for(audio: Path, sidecar: dict) -> str:
@@ -57,6 +58,24 @@ def _bundle_title(path: Path) -> str | None:
     except (OSError, ValueError, TypeError):
         return None
     return value if isinstance(value, str) else None
+
+
+def _cover_path_for(audio: Path) -> Path | None:
+    """Use the dance bundle jacket when present, without requiring one."""
+    metadata_path = audio.parent / "song.json"
+    try:
+        cover_name = json.loads(metadata_path.read_text(encoding="utf-8")).get("cover", "song.bmp")
+    except (OSError, ValueError, TypeError):
+        cover_name = "song.bmp"
+    if isinstance(cover_name, str):
+        candidate = audio.parent / cover_name
+        if candidate.parent == audio.parent and candidate.is_file():
+            return candidate
+    for name in ("song.bmp", "cover.bmp", "cover.png", "cover.jpg", "cover.jpeg"):
+        candidate = audio.parent / name
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def discover_songs(directory: Path) -> list[Song]:

@@ -118,3 +118,12 @@ class CoreTests(unittest.TestCase):
             (bundle / "song.json").write_text('{"title": "A Real Song"}')
             sidecar_path_for(audio).write_text(json.dumps({"schema_version": SCHEMA_VERSION, "source": {"file": "song.wav", "size": 1, "mtime_ns": audio.stat().st_mtime_ns}, "duration": 3, "tempo_bpm": 120, "beats": []}))
             self.assertEqual(load_song(audio).title, "A Real Song")
+
+    def test_song_uses_dance_bundle_cover_when_present(self):
+        with TemporaryDirectory() as temp:
+            bundle = Path(temp) / "bundle"; bundle.mkdir()
+            audio = bundle / "song.wav"; audio.write_bytes(b"x")
+            cover = bundle / "jacket.bmp"; cover.write_bytes(b"x")
+            (bundle / "song.json").write_text('{"title": "Cover", "cover": "jacket.bmp"}')
+            sidecar_path_for(audio).write_text(json.dumps({"schema_version": SCHEMA_VERSION, "source": {"file": "song.wav", "size": 1, "mtime_ns": audio.stat().st_mtime_ns}, "duration": 3, "tempo_bpm": 120, "beats": []}))
+            self.assertEqual(load_song(audio).cover_path, cover)
