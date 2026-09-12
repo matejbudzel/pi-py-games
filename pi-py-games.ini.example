@@ -15,3 +15,6 @@ config=config/dance.ini
 [2048]
 # Optional; 2048 currently has no user settings.
 config=pi-2048.ini
+
+[shadow-run]
+config=config/shadow-run.ini

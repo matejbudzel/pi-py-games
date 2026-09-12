@@ -22,6 +22,16 @@ class Action(Enum):
 
 
 KEY_ACTIONS = {
+    # Physical three-lane debug layout for games such as Shadow Run:
+    # q/a/z = left lane, w/x = centre lane, e/d/c = right lane.
+    pygame.K_q: Action.LEFT,
+    pygame.K_a: Action.LEFT,
+    pygame.K_z: Action.LEFT,
+    pygame.K_w: Action.UP,
+    pygame.K_x: Action.UP,
+    pygame.K_e: Action.RIGHT,
+    pygame.K_d: Action.RIGHT,
+    pygame.K_c: Action.RIGHT,
     pygame.K_LEFT: Action.LEFT,
     pygame.K_RIGHT: Action.RIGHT,
     pygame.K_UP: Action.UP,

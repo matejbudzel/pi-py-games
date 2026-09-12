@@ -4,7 +4,27 @@ A small monorepo of retro-like, dance-mat-first Python/Pygame games for the Rasp
 
 Games live in `src/games/`, with their code, assets, and game-specific configuration kept together. `src/common/` contains the small shared layer: canonical keyboard/dance-pad actions, joystick lifecycle, framebuffer/display support, console input, and lightweight performance timing. There is no workspace tool or generated monorepo setup.
 
-Included games are **pi-dance**, the original small DDR-style rhythm game, and **2048**, a compact 320×240 tile game controlled with the same dance mat. Future games add one package under `src/games/` and one registry entry; the launcher continues to use the same provider contract.
+Included games are **pi-dance**, the original small DDR-style rhythm game, **2048**, and **Shadow Run**, a beat-aware three-lane floor-is-danger runner. Future games add one package under `src/games/` and one registry entry; the launcher continues to use the same provider contract.
+
+## Shadow Run
+
+Shadow Run renders at 427×240 and `GameDisplay` scales that canvas exactly 2× to 854×480 with nearest-neighbour pixels. It uses the same shared keyboard/pad actions as the other games: arrows map to broad LEFT/CENTER/RIGHT mat lanes (Up and Down are CENTER), Enter/Space starts, and Escape returns/exits. For desktop mat simulation, hold `Q/A/Z` for left, `W/X` for centre, and `E/D/C` for right; arrows remain available. `--seed 1234 --debug` makes terrain reproducible and exposes the detected contacts.
+
+It is deliberately a procedural runner rather than a fixed chart. A terrain state is a two-foot lane stance. Every normal generated change shares at least one occupied lane with its predecessor, so it never asks both feet to change lanes at once. Short transition windows forgive one or zero contacts; otherwise unsafe/missing contacts drain stamina. Valid play regenerates stamina after a short delay. The game ends at zero stamina or at natural audio completion, then keeps its star result visible until Start or Select.
+
+Songs are external recursive `*.wav` files paired with `*.shadow.json`; songs missing a valid, current sidecar are hidden. Prepare on a desktop, never on the Pi:
+
+```bash
+python -m tools.prepare_shadow_songs /path/to/music
+# or after installation:
+prepare-shadow-songs /path/to/music
+```
+
+The stable sidecar suffix is `.shadow.json`. It stores schema version, source filename/size/mtime, duration, estimated BPM, and beat objects (`time`, normalized `strength`, `accent`). A current sidecar is skipped; use `--force` to regenerate. The optional desktop-only `librosa` package improves beat detection. Without it, the tool validates PCM WAV and writes a conservative 120-BPM fallback timeline. Runtime needs only Pygame and JSON.
+
+Configure `[shadow-run] config=config/shadow-run.ini` in the provider config and set `[songs] directory` in that file. Launch locally with `pi-shadow-run --seed 1234`, or through `pi-py-games run shadow-run`.
+
+The Pi-specific assumptions remain those shared by the repository: 22.05 kHz/16-bit stereo PCM WAV is preferred, the 2048-sample mixer buffer trades latency for Pi 1 stability, and `fbdev` uses the existing console and framebuffer paths. Physical pad layouts that expose only four D-pad events cannot distinguish diagonal corners; their left/right/up/down events are intentionally collapsed to the broad three lanes described above. This has not been verified on target hardware.
 
 ## Launcher provider
 

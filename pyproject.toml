@@ -12,9 +12,15 @@ dependencies = [
   "pygame>=2.5,<3",
 ]
 
+[project.optional-dependencies]
+# Desktop-only beat analysis. The game runtime intentionally does not import it.
+song-prep = ["librosa>=0.10,<1"]
+
 [project.scripts]
 pi-dance = "games.dance.main:main"
 pi-2048 = "games.twenty48.main:main"
+pi-shadow-run = "games.shadow_run.main:main"
+prepare-shadow-songs = "games.shadow_run.prepare_songs:main"
 pi-py-games = "pi_py_games.provider:main"
 
 [tool.setuptools.packages.find]

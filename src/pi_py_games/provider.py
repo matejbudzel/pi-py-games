@@ -12,6 +12,7 @@ MANIFEST_VERSION = 1
 GAMES = (
     ("pi-dance", "Tancuj, tancuj, vykrúcaj!", "games.dance.main", "PI_DANCE_CONFIG", "config/dance.ini"),
     ("2048", "2048", "games.twenty48.main", "PI_2048_CONFIG", "pi-2048.ini"),
+    ("shadow-run", "Shadow Run", "games.shadow_run.main", "PI_SHADOW_RUN_CONFIG", "config/shadow-run.ini"),
 )
 
 
