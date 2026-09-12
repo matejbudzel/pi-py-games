@@ -71,6 +71,8 @@ class App:
         self.screen_surface, self.clock = self.display.canvas, pygame.time.Clock()
         self.font = pygame.font.Font(SWEET16_FONT_PATH, 16)
         self.big_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
+        self.modal_font = pygame.font.Font(SWEET16_FONT_PATH, 16)
+        self.modal_font.set_bold(True)
         self.joystick = JoystickInput() if self.platform.backend == "pygame" else None
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
@@ -412,18 +414,24 @@ class App:
         frame = pygame.Rect(76, 78, 275, 84 if confirmation else 56)
         pygame.draw.rect(self.screen_surface, (18, 35, 42), frame)
         pygame.draw.rect(self.screen_surface, (240, 245, 255), frame, 1)
-        text = self.font.render(message, False, (255, 235, 109))
-        self.screen_surface.blit(text, text.get_rect(center=(frame.centerx, frame.y + 20)))
-        if confirmation:
-            choices = ((self.settings.exit_confirm_button, self.leave_confirm_selected), (self.settings.exit_cancel_button, not self.leave_confirm_selected))
-            x = frame.x + 54
-            for label, selected in choices:
-                color = (255, 210, 80) if selected else (225, 230, 236)
-                if selected:
-                    self.screen_surface.blit(self.font.render(">", False, color), (x - 12, frame.y + 48))
-                rendered = self.font.render(label, False, color)
-                self.screen_surface.blit(rendered, (x, frame.y + 48))
-                x += rendered.get_width() + 48
+        message_surface = self.modal_font.render(message, False, (255, 235, 109))
+        if not confirmation:
+            self.screen_surface.blit(message_surface, message_surface.get_rect(center=frame.center))
+            return
+        choices = ((self.settings.exit_confirm_button, self.leave_confirm_selected), (self.settings.exit_cancel_button, not self.leave_confirm_selected))
+        labels = [(self.font.render(label, False, (255, 210, 80) if selected else (225, 230, 236)), selected) for label, selected in choices]
+        gap = 36
+        content_height = message_surface.get_height() + 14 + max(label.get_height() for label, _ in labels)
+        content_top = frame.centery - content_height // 2
+        self.screen_surface.blit(message_surface, message_surface.get_rect(midtop=(frame.centerx, content_top)))
+        button_y = content_top + message_surface.get_height() + 14
+        block_width = sum(label.get_width() for label, _ in labels) + gap
+        x = frame.centerx - block_width // 2
+        for label, selected in labels:
+            if selected:
+                self.screen_surface.blit(self.font.render(">", False, (255, 210, 80)), (x - 12, button_y))
+            self.screen_surface.blit(label, (x, button_y))
+            x += label.get_width() + gap
 
     def _load_menu_background(self) -> pygame.Surface:
         """Keep menu art separate from gameplay and decode it only once."""
