@@ -28,6 +28,10 @@ SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
+GRID_RECT = pygame.Rect(LANE_X - 4, TOP - 4, TILE * 3 + 8, 218)
+LEFT_HUD_RECT = pygame.Rect(20, 80, 108, 110)
+RIGHT_HUD_RECT = pygame.Rect(330, 80, 80, 24)
+DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
 def visible_song_window(first_visible: int, selected: int, song_count: int) -> int:
@@ -57,6 +61,8 @@ class App:
             pygame.display.set_caption(settings.title)
         self.display = GameDisplay(self.platform, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT))
         self.screen_surface, self.clock = self.display.canvas, pygame.time.Clock()
+        self.font = pygame.font.Font(SWEET16_FONT_PATH, 16)
+        self.big_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
         self.joystick = JoystickInput() if self.platform.backend == "pygame" else None
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
@@ -79,6 +85,8 @@ class App:
         self.audio_jump_count = 0
         self.max_boundary_lateness_ms = 0.0
         self.report_written = False
+        self.gameplay_base: pygame.Surface | None = None
+        self.gameplay_needs_full_present = False
 
     def close(self) -> None:
         if getattr(self, "song", None) is not None and not self.report_written:
@@ -97,9 +105,9 @@ class App:
                     input_finished = time.perf_counter()
                     self._update()
                     update_finished = time.perf_counter()
-                    self._draw()
+                    dirty_rectangles = self._draw()
                     render_finished = time.perf_counter()
-                    self.display.present()
+                    self.display.present(dirty_rectangles)
                     present_finished = time.perf_counter()
                     self.clock.tick(FPS)
                     frame_finished = time.perf_counter()
@@ -176,6 +184,8 @@ class App:
         self.music_started = False
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
         self.timeline.prepare_song(song.duration)
+        self.gameplay_base = None
+        self.gameplay_needs_full_present = True
         # Decode before the start line reaches the receptor, but remain silent.
         pygame.mixer.music.load(str(song.audio_path))
         self.screen = Screen.PLAYING
@@ -244,42 +254,64 @@ class App:
         self.keyboard_until = {direction: until for direction, until in self.keyboard_until.items() if until > now}
         return self.held | set(self.keyboard_until)
 
-    def _draw(self) -> None:
+    def _draw(self) -> list[pygame.Rect] | None:
         surface = self.screen_surface
-        surface.fill((25, 30, 58))
-        # decorative pixel stars, fixed so no per-frame asset decoding/allocation
-        for x, y in ((20, 18), (92, 49), (330, 24), (400, 110), (45, 180)):
-            pygame.draw.rect(surface, (72, 88, 145), (x, y, 2, 2))
-        # Sweet16's tiny point sizes become illegible after RGB565 framebuffer
-        # presentation.  Keep every player-facing glyph at its usable size.
-        font = pygame.font.Font(SWEET16_FONT_PATH, 16)
-        big = pygame.font.Font(SWEET16_FONT_PATH, 24)
         if self.screen is Screen.LIST:
-            surface.blit(big.render(self.settings.title, False, (255, 225, 122)), (22, 22))
+            self._draw_background(surface)
+            surface.blit(self.big_font.render(self.settings.title, False, (255, 225, 122)), (22, 22))
             if not self.songs:
-                surface.blit(font.render("No prepared WAV songs", False, (220, 220, 230)), (22, 72))
+                surface.blit(self.font.render("No prepared WAV songs", False, (220, 220, 230)), (22, 72))
             for row, song in enumerate(self.songs[self.first_visible:self.first_visible + VISIBLE_SONG_ROWS]):
                 index = self.first_visible + row
                 y = 52 + row * 18
-                if index == self.selected: surface.blit(font.render(">", False, (255, 210, 80)), (20, y))
-                surface.blit(font.render(song.title[:27], False, (240, 242, 255)), (34, y))
-                surface.blit(font.render(f"{song.duration:.0f}s {song.tempo_bpm:.0f}", False, (140, 180, 210)), (286, y))
-        elif self.screen is Screen.RESULT:
-            surface.blit(big.render("*" * self.result_stars, False, (255, 221, 88)), (150, 94))
+                if index == self.selected: surface.blit(self.font.render(">", False, (255, 210, 80)), (20, y))
+                surface.blit(self.font.render(song.title[:27], False, (240, 242, 255)), (34, y))
+                surface.blit(self.font.render(f"{song.duration:.0f}s {song.tempo_bpm:.0f}", False, (140, 180, 210)), (286, y))
+            return None
+        if self.screen is Screen.RESULT:
+            self._draw_background(surface)
+            surface.blit(self.big_font.render("*" * self.result_stars, False, (255, 221, 88)), (150, 94))
             pygame.draw.circle(surface, (94, 220, 155), (213, 138), 18)
             pygame.draw.circle(surface, (25, 30, 58), (207, 133), 2); pygame.draw.circle(surface, (25, 30, 58), (219, 133), 2)
+            return None
+        if self.gameplay_base is None:
+            self.gameplay_base = self._create_gameplay_base()
+            surface.blit(self.gameplay_base, (0, 0))
         else:
-            self._draw_game(font)
+            for rectangle in self._gameplay_dirty_rectangles():
+                surface.blit(self.gameplay_base, rectangle, rectangle)
+        self._draw_game()
         if self.debug:
-            surface.blit(font.render(f"held={','.join(sorted(self._contact_actions()))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4, 220))
+            surface.blit(self.font.render(f"held={','.join(sorted(self._contact_actions()))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4, 220))
+        if self.gameplay_needs_full_present:
+            self.gameplay_needs_full_present = False
+            return [pygame.Rect(0, 0, WIDTH, HEIGHT)]
+        return self._gameplay_dirty_rectangles()
 
-    def _draw_game(self, font: pygame.font.Font) -> None:
+    @staticmethod
+    def _draw_background(surface: pygame.Surface) -> None:
+        surface.fill((25, 30, 58))
+        for x, y in ((20, 18), (92, 49), (330, 24), (400, 110), (45, 180)):
+            pygame.draw.rect(surface, (72, 88, 145), (x, y, 2, 2))
+
+    def _create_gameplay_base(self) -> pygame.Surface:
+        base = pygame.Surface((WIDTH, HEIGHT), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
+        self._draw_background(base)
+        pygame.draw.rect(base, (45, 12, 38), GRID_RECT)
+        return base
+
+    def _gameplay_dirty_rectangles(self) -> list[pygame.Rect]:
+        rectangles = [GRID_RECT, LEFT_HUD_RECT, RIGHT_HUD_RECT]
+        if self.debug:
+            rectangles.append(DEBUG_RECT)
+        return rectangles
+
+    def _draw_game(self) -> None:
         assert self.song and self.timeline
         now = self._song_time()
         speed = difficulty_at(now, self.song.duration).speed
         # The row offset advances every frame. Each row asks the planned
         # timeline which stance it will require when it reaches the receptor.
-        pygame.draw.rect(self.screen_surface, (45, 12, 38), (LANE_X - 4, TOP - 4, TILE * 3 + 8, 218))
         preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
         scroll_time = now if self.music_started else preplay_elapsed
         offset = int(scroll_time * speed) % TILE
@@ -309,7 +341,7 @@ class App:
         pygame.draw.rect(self.screen_surface, (83, 220, 130), (20, 190 - int(self.stamina.value), 14, int(self.stamina.value)))
         progress = self._song_time() / self.song.duration
         pygame.draw.rect(self.screen_surface, (70, 80, 114), (48, 80, 80, 6)); pygame.draw.rect(self.screen_surface, (255, 210, 90), (48, 80, int(80 * progress), 6))
-        self.screen_surface.blit(font.render(str(self.score), False, (255, 230, 135)), (330, 80))
+        self.screen_surface.blit(self.font.render(str(self.score), False, (255, 230, 135)), (330, 80))
         if self.timeline.in_transition_window(now, self.song.duration):
             pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)
         if not self.music_started:
@@ -319,5 +351,5 @@ class App:
                 x = LANE_X + lane.value * TILE
                 pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_y), (x + TILE, start_y), 2)
             remaining = max(1, int(PREPLAY_SECONDS - preplay_elapsed - 0.001) + 1)
-            countdown = pygame.font.Font(SWEET16_FONT_PATH, 24).render(str(remaining), False, (255, 235, 109))
+            countdown = self.big_font.render(str(remaining), False, (255, 235, 109))
             self.screen_surface.blit(countdown, countdown.get_rect(center=(WIDTH // 2, 70)))

@@ -84,10 +84,27 @@ class GameDisplay:
 
     def present(self, rectangles: list[pygame.Rect] | None = None) -> None:
         if self.canvas is not self._output:
-            # pygame.transform.scale is deliberately nearest-neighbour.  Keeping
-            # this here gives SDL and direct-fbdev games identical pixels.
-            pygame.transform.scale(self.canvas, self.canvas_size, self._output)
-            rectangles = None
+            # pygame.transform.scale is deliberately nearest-neighbour.  Scale
+            # only dirty logical rectangles when possible; fbdev otherwise pays
+            # a full 854x480 conversion and framebuffer copy every frame.
+            if rectangles is None:
+                pygame.transform.scale(self.canvas, self.canvas_size, self._output)
+                rectangles = None
+            else:
+                source_rectangles = rectangles
+                output_rectangles: list[pygame.Rect] = []
+                for source in source_rectangles:
+                    source = source.clip(self.canvas.get_rect())
+                    if not source.width or not source.height:
+                        continue
+                    left = round(source.left * self.canvas_size[0] / self.logical_size[0])
+                    top = round(source.top * self.canvas_size[1] / self.logical_size[1])
+                    right = round(source.right * self.canvas_size[0] / self.logical_size[0])
+                    bottom = round(source.bottom * self.canvas_size[1] / self.logical_size[1])
+                    destination = pygame.Rect(left, top, right - left, bottom - top)
+                    pygame.transform.scale(self.canvas.subsurface(source), destination.size, self._output.subsurface(destination))
+                    output_rectangles.append(destination)
+                rectangles = output_rectangles
         if self.framebuffer is not None:
             self.framebuffer.present(self._output, rectangles)
         else:
