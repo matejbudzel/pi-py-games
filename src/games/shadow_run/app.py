@@ -39,6 +39,7 @@ FOOT_RIGHT_PATH = Path(__file__).parent / "assets" / "foot-right.png"
 FOOT_SIZE = (16, 22)
 RUNNER_READY_PATH = Path(__file__).parent / "assets" / "runner-ready.png"
 RUNNER_JUMP_PATH = Path(__file__).parent / "assets" / "runner-jump.png"
+FINISH_SUNNY_ROWS = 6
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
@@ -760,9 +761,12 @@ class App:
             rows = ((row, PLAYER_Y + distance - row * TILE) for row in range(first_row, last_row))
             start_line_y = PLAYER_Y + distance
             # The picnic is just beyond the final planned row, so its lawn
-            # first appears at the top and rolls in behind the terrain.
+            # first appears at the top and rolls in behind the terrain. Keep
+            # bright lawn behind it rather than exposing the dark channel.
             finish_y = PLAYER_Y + distance - len(self.terrain_rows) * TILE
             if -self.picnic_finish.get_height() < finish_y < HEIGHT:
+                for row in range(1, FINISH_SUNNY_ROWS + 1):
+                    self.screen_surface.blit(self.terrain_lawn, (LANE_X, finish_y - row * TILE))
                 self.screen_surface.blit(self.picnic_finish, (GRID_RECT.x, finish_y))
         else:
             # Row zero is the start line.  Safe ground remains below it while
