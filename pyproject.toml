@@ -29,3 +29,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "games.dance" = ["assets/fonts/*.ttf", "assets/fonts/*.txt", "assets/gameplay/*.png", "assets/gameplay/*.bmp", "*.ini"]
+"games.shadow_run" = ["assets/*.png"]

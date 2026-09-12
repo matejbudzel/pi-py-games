@@ -30,6 +30,7 @@ VISIBLE_SONG_ROWS = 10
 PREVIEW_SIZE = 128
 PREVIEW_RECT = pygame.Rect(282, 76, PREVIEW_SIZE, PREVIEW_SIZE)
 TITLE_RECT = pygame.Rect(34, 0, PREVIEW_RECT.left - 46, 16)
+MENU_BACKGROUND_PATH = Path(__file__).parent / "assets" / "menu-lawn.png"
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
@@ -71,6 +72,7 @@ class App:
         self.joystick = JoystickInput() if self.platform.backend == "pygame" else None
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
+        self.menu_background = self._load_menu_background()
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
         self.song_labels = {song.audio_path: self._ellipsize_title(song.title) for song in self.songs}
         self.selected, self.first_visible, self.screen, self.running = 0, 0, Screen.LIST, True
@@ -285,7 +287,7 @@ class App:
     def _draw(self) -> list[pygame.Rect] | None:
         surface = self.screen_surface
         if self.screen is Screen.LIST:
-            self._draw_background(surface)
+            surface.blit(self.menu_background, (0, 0))
             surface.blit(self.big_font.render(self.settings.title, False, (255, 225, 122)), (22, 22))
             if not self.songs:
                 surface.blit(self.font.render("No prepared WAV songs", False, (220, 220, 230)), (22, 72))
@@ -333,6 +335,19 @@ class App:
         self._draw_background(base)
         pygame.draw.rect(base, (45, 12, 38), GRID_RECT)
         return base
+
+    def _load_menu_background(self) -> pygame.Surface:
+        """Keep menu art separate from gameplay and decode it only once."""
+        background = pygame.Surface((WIDTH, HEIGHT), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
+        try:
+            image = pygame.image.load(MENU_BACKGROUND_PATH)
+            converted = pygame.Surface(image.get_size(), depth=background.get_bitsize(), masks=background.get_masks())
+            converted.blit(image, (0, 0))
+            pygame.transform.scale(converted, background.get_size(), background)
+        except (OSError, pygame.error):
+            logging.getLogger(__name__).warning("Cannot load Shadow Run menu background %s", MENU_BACKGROUND_PATH)
+            background.fill((17, 48, 43))
+        return background
 
     def _load_cover_preview(self, song: Song) -> pygame.Surface:
         """Load once at menu startup; missing covers get original pixel art."""
