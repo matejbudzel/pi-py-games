@@ -570,7 +570,9 @@ class App:
             x = LANE_X + lane.value * TILE + (TILE - FOOT_SIZE[0]) // 2
             self.screen_surface.blit(sprite, (x, y))
         for lane, count in contacts.items():
-            if count <= expected.get(lane, 0):
+            # Multiple physical panels can be triggered by one foot inside a
+            # broad lane. Only a contact outside the planned lane is an error.
+            if lane in expected:
                 continue
             x = LANE_X + lane.value * TILE
             y = PLAYER_Y - 11

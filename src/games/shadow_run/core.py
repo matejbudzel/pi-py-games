@@ -34,7 +34,13 @@ def is_valid_stance(contacts: set[Lane] | Mapping[Lane, int], required: Stance) 
     """Require one physical contact for each foot in the planned stance."""
     counts = dict(contacts) if isinstance(contacts, Mapping) else {lane: 1 for lane in contacts}
     required_counts = {lane: required.count(lane) for lane in set(required)}
-    return {lane: count for lane, count in counts.items() if count > 0} == required_counts
+    # One real foot can overlap two panels in its broad lane.  Those duplicate
+    # signals are harmless, but a double-foot single-lane stance still needs
+    # two independent contacts in that lane.
+    return (
+        all(lane in required_counts for lane, count in counts.items() if count > 0)
+        and all(counts.get(lane, 0) >= needed for lane, needed in required_counts.items())
+    )
 
 
 def is_safe_transition(current: Stance, next_stance: Stance) -> bool:
