@@ -30,6 +30,11 @@ DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 GRID_RECT = pygame.Rect(LANE_X - 4 * SCALE, TOP - 4 * SCALE, TILE * 3 + 8 * SCALE, 218 * SCALE)
+TERRAIN_SIZE = (GRID_RECT.width // SCALE, GRID_RECT.height // SCALE)
+TERRAIN_LANE_X = 4
+TERRAIN_TILE = 30
+TERRAIN_TOP = 4
+TERRAIN_PLAYER_Y = 188
 LEFT_HUD_RECT = pygame.Rect(20 * SCALE, 80 * SCALE, 108 * SCALE, 110 * SCALE)
 RIGHT_HUD_RECT = pygame.Rect(330 * SCALE, 80 * SCALE, 80 * SCALE, 24 * SCALE)
 DEBUG_RECT = pygame.Rect(0, 216 * SCALE, WIDTH, 24 * SCALE)
@@ -92,6 +97,7 @@ class App:
         self.total_backend_present_ms = 0.0
         self.max_backend_present_ms = 0.0
         self.gameplay_base: pygame.Surface | None = None
+        self.terrain_surface = pygame.Surface(TERRAIN_SIZE, depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
         self.gameplay_needs_full_present = False
 
     def close(self) -> None:
@@ -330,29 +336,10 @@ class App:
     def _draw_game(self) -> None:
         assert self.song and self.timeline
         now = self._song_time()
-        speed = difficulty_at(now, self.song.duration).speed * SCALE
-        # The row offset advances every frame. Each row asks the planned
-        # timeline which stance it will require when it reaches the receptor.
-        preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
-        scroll_time = now if self.music_started else preplay_elapsed
-        offset = int(scroll_time * speed) % TILE
-        start_y = round(TOP + (PLAYER_Y - TOP) * (preplay_elapsed / PREPLAY_SECONDS))
-        for row in range(-1, 8):
-            y = TOP + offset + row * TILE
-            if not self.music_started:
-                # Safe terrain has already flowed below the descending start
-                # line. Above it, reveal the terrain that will arrive after
-                # music begins, giving the player time to take the first pose.
-                safe = set(Lane) if y >= start_y else set(self.timeline.stance_at(max(0.0, (start_y - y) / speed)))
-            else:
-                terrain_time = now + (PLAYER_Y - y) / speed
-                # Negative time is the all-safe lead-in which existed below
-                # the descending start line. Afterwards every terrain band,
-                # including one that crossed the receptor, keeps flowing on.
-                safe = set(Lane) if terrain_time < 0 else set(self.timeline.stance_at(terrain_time))
-            for lane in Lane:
-                color = SAFE_TILE if lane in safe else DANGER_TILE
-                pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 2, y + 2, TILE - 4, TILE - 4))
+        self._draw_terrain(now)
+        # Receptors and HUD stay native; only the fast-moving terrain is a
+        # small pixel layer scaled into this physical rectangle.
+        pygame.transform.scale(self.terrain_surface, GRID_RECT.size, self.screen_surface.subsurface(GRID_RECT))
         contacts = lane_contacts(self._contact_actions())
         for lane in Lane:
             receptor = pygame.Rect(LANE_X + lane.value * TILE + 6, PLAYER_Y - 12, TILE - 12, 24)
@@ -366,11 +353,40 @@ class App:
         if self.timeline.in_transition_window(now, self.song.duration):
             pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 12, PLAYER_Y - 10, TILE * 3 + 24, 30), 2)
         if not self.music_started:
+            remaining = max(1, int(PREPLAY_SECONDS - min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at) - 0.001) + 1)
+            countdown = self.big_font.render(str(remaining), False, (255, 235, 109))
+            self.screen_surface.blit(countdown, countdown.get_rect(center=(WIDTH // 2, 70 * SCALE)))
+
+    def _draw_terrain(self, now: float) -> None:
+        """Draw the scrolling world at its original pixel-art resolution."""
+        terrain = self.terrain_surface
+        terrain.fill((45, 12, 38))
+        speed = difficulty_at(now, self.song.duration).speed
+        # The row offset advances every frame. Each row asks the planned
+        # timeline which stance it will require when it reaches the receptor.
+        preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
+        scroll_time = now if self.music_started else preplay_elapsed
+        offset = int(scroll_time * speed) % TERRAIN_TILE
+        start_y = round(TERRAIN_TOP + (TERRAIN_PLAYER_Y - TERRAIN_TOP) * (preplay_elapsed / PREPLAY_SECONDS))
+        for row in range(-1, 8):
+            y = TERRAIN_TOP + offset + row * TERRAIN_TILE
+            if not self.music_started:
+                # Safe terrain has already flowed below the descending start
+                # line. Above it, reveal the terrain that will arrive after
+                # music begins, giving the player time to take the first pose.
+                safe = set(Lane) if y >= start_y else set(self.timeline.stance_at(max(0.0, (start_y - y) / speed)))
+            else:
+                terrain_time = now + (TERRAIN_PLAYER_Y - y) / speed
+                # Negative time is the all-safe lead-in which existed below
+                # the descending start line. Afterwards every terrain band,
+                # including one that crossed the receptor, keeps flowing on.
+                safe = set(Lane) if terrain_time < 0 else set(self.timeline.stance_at(terrain_time))
+            for lane in Lane:
+                color = SAFE_TILE if lane in safe else DANGER_TILE
+                pygame.draw.rect(terrain, color, (TERRAIN_LANE_X + lane.value * TERRAIN_TILE + 1, y + 1, TERRAIN_TILE - 2, TERRAIN_TILE - 2))
+        if not self.music_started:
             # A striped line visibly flows from the top to the receptor during
             # the silent grace period and becomes the first terrain boundary.
             for lane in Lane:
-                x = LANE_X + lane.value * TILE
-                pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_y), (x + TILE, start_y), 4)
-            remaining = max(1, int(PREPLAY_SECONDS - preplay_elapsed - 0.001) + 1)
-            countdown = self.big_font.render(str(remaining), False, (255, 235, 109))
-            self.screen_surface.blit(countdown, countdown.get_rect(center=(WIDTH // 2, 70 * SCALE)))
+                x = TERRAIN_LANE_X + lane.value * TERRAIN_TILE
+                pygame.draw.line(terrain, (255, 235, 109), (x, start_y), (x + TERRAIN_TILE, start_y), 2)
