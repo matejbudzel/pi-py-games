@@ -85,6 +85,11 @@ class App:
         self.audio_jump_count = 0
         self.max_boundary_lateness_ms = 0.0
         self.report_written = False
+        self.presentation_frames = 0
+        self.total_scale_ms = 0.0
+        self.max_scale_ms = 0.0
+        self.total_backend_present_ms = 0.0
+        self.max_backend_present_ms = 0.0
         self.gameplay_base: pygame.Surface | None = None
         self.gameplay_needs_full_present = False
 
@@ -111,6 +116,11 @@ class App:
                     # than hundreds of Python row copies for scaled dirty rects.
                     self.display.present(None if self.platform.backend == "fbdev" else dirty_rectangles)
                     present_finished = time.perf_counter()
+                    self.presentation_frames += 1
+                    self.total_scale_ms += self.display.last_scale_ms
+                    self.max_scale_ms = max(self.max_scale_ms, self.display.last_scale_ms)
+                    self.total_backend_present_ms += self.display.last_backend_present_ms
+                    self.max_backend_present_ms = max(self.max_backend_present_ms, self.display.last_backend_present_ms)
                     self.clock.tick(FPS)
                     frame_finished = time.perf_counter()
                     self.performance.record(FrameTiming(
@@ -182,6 +192,11 @@ class App:
         self.audio_jump_count = 0
         self.max_boundary_lateness_ms = 0.0
         self.report_written = False
+        self.presentation_frames = 0
+        self.total_scale_ms = 0.0
+        self.max_scale_ms = 0.0
+        self.total_backend_present_ms = 0.0
+        self.max_backend_present_ms = 0.0
         self.started_at = 0.0
         self.music_started = False
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
@@ -243,6 +258,10 @@ class App:
             f"maximum_audio_clock_step_ms={self.max_audio_step_ms:.3f}\n"
             f"audio_clock_steps_over_125ms={self.audio_jump_count}\n"
             f"maximum_terrain_boundary_lateness_ms={self.max_boundary_lateness_ms:.3f}\n"
+            f"average_scale_ms={self.total_scale_ms / max(1, self.presentation_frames):.3f}\n"
+            f"maximum_scale_ms={self.max_scale_ms:.3f}\n"
+            f"average_backend_present_ms={self.total_backend_present_ms / max(1, self.presentation_frames):.3f}\n"
+            f"maximum_backend_present_ms={self.max_backend_present_ms:.3f}\n"
         )
         try:
             PERFORMANCE_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)

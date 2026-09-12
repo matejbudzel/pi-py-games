@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import time
 from typing import Callable
 
 import pygame
@@ -62,6 +63,8 @@ class GameDisplay:
         self.framebuffer: FbdevPresenter | None = None
         self._output: pygame.Surface
         self.canvas: pygame.Surface
+        self.last_scale_ms = 0.0
+        self.last_backend_present_ms = 0.0
         self._open()
 
     def _open(self) -> None:
@@ -83,6 +86,7 @@ class GameDisplay:
             )
 
     def present(self, rectangles: list[pygame.Rect] | None = None) -> None:
+        scale_started = time.perf_counter()
         if self.canvas is not self._output:
             # pygame.transform.scale is deliberately nearest-neighbour.  Scale
             # only dirty logical rectangles when possible; fbdev otherwise pays
@@ -105,10 +109,13 @@ class GameDisplay:
                     pygame.transform.scale(self.canvas.subsurface(source), destination.size, self._output.subsurface(destination))
                     output_rectangles.append(destination)
                 rectangles = output_rectangles
+        self.last_scale_ms = (time.perf_counter() - scale_started) * 1000
+        backend_started = time.perf_counter()
         if self.framebuffer is not None:
             self.framebuffer.present(self._output, rectangles)
         else:
             pygame.display.flip()
+        self.last_backend_present_ms = (time.perf_counter() - backend_started) * 1000
 
     def reopen(self) -> None:
         if self.framebuffer is None:
