@@ -22,16 +22,17 @@ from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
-LANE_X, TILE, TOP, PLAYER_Y = 166, 30, 18, 202
+SCALE = 2
+LANE_X, TILE, TOP, PLAYER_Y = 166 * SCALE, 30 * SCALE, 18 * SCALE, 202 * SCALE
 PREPLAY_SECONDS = 3.0
 SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
-GRID_RECT = pygame.Rect(LANE_X - 4, TOP - 4, TILE * 3 + 8, 218)
-LEFT_HUD_RECT = pygame.Rect(20, 80, 108, 110)
-RIGHT_HUD_RECT = pygame.Rect(330, 80, 80, 24)
-DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
+GRID_RECT = pygame.Rect(LANE_X - 4 * SCALE, TOP - 4 * SCALE, TILE * 3 + 8 * SCALE, 218 * SCALE)
+LEFT_HUD_RECT = pygame.Rect(20 * SCALE, 80 * SCALE, 108 * SCALE, 110 * SCALE)
+RIGHT_HUD_RECT = pygame.Rect(330 * SCALE, 80 * SCALE, 80 * SCALE, 24 * SCALE)
+DEBUG_RECT = pygame.Rect(0, 216 * SCALE, WIDTH, 24 * SCALE)
 
 
 def visible_song_window(first_visible: int, selected: int, song_count: int) -> int:
@@ -59,10 +60,10 @@ class App:
         initialize_pygame(self.platform, audio=True)
         if self.platform.backend == "pygame":
             pygame.display.set_caption(settings.title)
-        self.display = GameDisplay(self.platform, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT))
+        self.display = GameDisplay(self.platform, OUTPUT_SIZE)
         self.screen_surface, self.clock = self.display.canvas, pygame.time.Clock()
-        self.font = pygame.font.Font(SWEET16_FONT_PATH, 16)
-        self.big_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
+        self.font = pygame.font.Font(SWEET16_FONT_PATH, 32)
+        self.big_font = pygame.font.Font(SWEET16_FONT_PATH, 48)
         self.joystick = JoystickInput() if self.platform.backend == "pygame" else None
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
@@ -232,7 +233,6 @@ class App:
             if raw_audio_step > 0.125:
                 self.audio_jump_count += 1
         delta = min(0.1, raw_audio_step); self.last_time = now
-        speed = difficulty_at(now, self.song.duration).speed
         expected = self.timeline.stance_at(now)
         if expected != self.active_stance:
             self.active_stance = expected
@@ -279,21 +279,21 @@ class App:
         surface = self.screen_surface
         if self.screen is Screen.LIST:
             self._draw_background(surface)
-            surface.blit(self.big_font.render(self.settings.title, False, (255, 225, 122)), (22, 22))
+            surface.blit(self.big_font.render(self.settings.title, False, (255, 225, 122)), (22 * SCALE, 22 * SCALE))
             if not self.songs:
-                surface.blit(self.font.render("No prepared WAV songs", False, (220, 220, 230)), (22, 72))
+                surface.blit(self.font.render("No prepared WAV songs", False, (220, 220, 230)), (22 * SCALE, 72 * SCALE))
             for row, song in enumerate(self.songs[self.first_visible:self.first_visible + VISIBLE_SONG_ROWS]):
                 index = self.first_visible + row
-                y = 52 + row * 18
-                if index == self.selected: surface.blit(self.font.render(">", False, (255, 210, 80)), (20, y))
-                surface.blit(self.font.render(song.title[:27], False, (240, 242, 255)), (34, y))
-                surface.blit(self.font.render(f"{song.duration:.0f}s {song.tempo_bpm:.0f}", False, (140, 180, 210)), (286, y))
+                y = (52 + row * 18) * SCALE
+                if index == self.selected: surface.blit(self.font.render(">", False, (255, 210, 80)), (20 * SCALE, y))
+                surface.blit(self.font.render(song.title[:27], False, (240, 242, 255)), (34 * SCALE, y))
+                surface.blit(self.font.render(f"{song.duration:.0f}s {song.tempo_bpm:.0f}", False, (140, 180, 210)), (286 * SCALE, y))
             return None
         if self.screen is Screen.RESULT:
             self._draw_background(surface)
-            surface.blit(self.big_font.render("*" * self.result_stars, False, (255, 221, 88)), (150, 94))
-            pygame.draw.circle(surface, (94, 220, 155), (213, 138), 18)
-            pygame.draw.circle(surface, (25, 30, 58), (207, 133), 2); pygame.draw.circle(surface, (25, 30, 58), (219, 133), 2)
+            surface.blit(self.big_font.render("*" * self.result_stars, False, (255, 221, 88)), (150 * SCALE, 94 * SCALE))
+            pygame.draw.circle(surface, (94, 220, 155), (213 * SCALE, 138 * SCALE), 18 * SCALE)
+            pygame.draw.circle(surface, (25, 30, 58), (207 * SCALE, 133 * SCALE), 2 * SCALE); pygame.draw.circle(surface, (25, 30, 58), (219 * SCALE, 133 * SCALE), 2 * SCALE)
             return None
         if self.gameplay_base is None:
             self.gameplay_base = self._create_gameplay_base()
@@ -303,7 +303,7 @@ class App:
                 surface.blit(self.gameplay_base, rectangle, rectangle)
         self._draw_game()
         if self.debug:
-            surface.blit(self.font.render(f"held={','.join(sorted(self._contact_actions()))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4, 220))
+            surface.blit(self.font.render(f"held={','.join(sorted(self._contact_actions()))} stance={self.active_stance or ''}", False, (255, 255, 255)), (4 * SCALE, 220 * SCALE))
         if self.gameplay_needs_full_present:
             self.gameplay_needs_full_present = False
             return [pygame.Rect(0, 0, WIDTH, HEIGHT)]
@@ -313,7 +313,7 @@ class App:
     def _draw_background(surface: pygame.Surface) -> None:
         surface.fill((25, 30, 58))
         for x, y in ((20, 18), (92, 49), (330, 24), (400, 110), (45, 180)):
-            pygame.draw.rect(surface, (72, 88, 145), (x, y, 2, 2))
+            pygame.draw.rect(surface, (72, 88, 145), (x * SCALE, y * SCALE, 2 * SCALE, 2 * SCALE))
 
     def _create_gameplay_base(self) -> pygame.Surface:
         base = pygame.Surface((WIDTH, HEIGHT), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
@@ -330,7 +330,7 @@ class App:
     def _draw_game(self) -> None:
         assert self.song and self.timeline
         now = self._song_time()
-        speed = difficulty_at(now, self.song.duration).speed
+        speed = difficulty_at(now, self.song.duration).speed * SCALE
         # The row offset advances every frame. Each row asks the planned
         # timeline which stance it will require when it reaches the receptor.
         preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
@@ -352,25 +352,25 @@ class App:
                 safe = set(Lane) if terrain_time < 0 else set(self.timeline.stance_at(terrain_time))
             for lane in Lane:
                 color = SAFE_TILE if lane in safe else DANGER_TILE
-                pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
+                pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 2, y + 2, TILE - 4, TILE - 4))
         contacts = lane_contacts(self._contact_actions())
         for lane in Lane:
-            receptor = pygame.Rect(LANE_X + lane.value * TILE + 3, PLAYER_Y - 6, TILE - 6, 12)
+            receptor = pygame.Rect(LANE_X + lane.value * TILE + 6, PLAYER_Y - 12, TILE - 12, 24)
             pygame.draw.rect(self.screen_surface, (255, 226, 100) if lane in contacts else (31, 43, 68), receptor)
-            pygame.draw.rect(self.screen_surface, (240, 245, 255), receptor, 1)
-        pygame.draw.rect(self.screen_surface, (220, 55, 83), (20, 80, 14, 110))
-        pygame.draw.rect(self.screen_surface, (83, 220, 130), (20, 190 - int(self.stamina.value), 14, int(self.stamina.value)))
+            pygame.draw.rect(self.screen_surface, (240, 245, 255), receptor, 2)
+        pygame.draw.rect(self.screen_surface, (220, 55, 83), (20 * SCALE, 80 * SCALE, 14 * SCALE, 110 * SCALE))
+        pygame.draw.rect(self.screen_surface, (83, 220, 130), (20 * SCALE, (190 - int(self.stamina.value)) * SCALE, 14 * SCALE, int(self.stamina.value) * SCALE))
         progress = self._song_time() / self.song.duration
-        pygame.draw.rect(self.screen_surface, (70, 80, 114), (48, 80, 80, 6)); pygame.draw.rect(self.screen_surface, (255, 210, 90), (48, 80, int(80 * progress), 6))
-        self.screen_surface.blit(self.font.render(str(self.score), False, (255, 230, 135)), (330, 80))
+        pygame.draw.rect(self.screen_surface, (70, 80, 114), (48 * SCALE, 80 * SCALE, 80 * SCALE, 6 * SCALE)); pygame.draw.rect(self.screen_surface, (255, 210, 90), (48 * SCALE, 80 * SCALE, int(80 * progress) * SCALE, 6 * SCALE))
+        self.screen_surface.blit(self.font.render(str(self.score), False, (255, 230, 135)), (330 * SCALE, 80 * SCALE))
         if self.timeline.in_transition_window(now, self.song.duration):
-            pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)
+            pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 12, PLAYER_Y - 10, TILE * 3 + 24, 30), 2)
         if not self.music_started:
             # A striped line visibly flows from the top to the receptor during
             # the silent grace period and becomes the first terrain boundary.
             for lane in Lane:
                 x = LANE_X + lane.value * TILE
-                pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_y), (x + TILE, start_y), 2)
+                pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_y), (x + TILE, start_y), 4)
             remaining = max(1, int(PREPLAY_SECONDS - preplay_elapsed - 0.001) + 1)
             countdown = self.big_font.render(str(remaining), False, (255, 235, 109))
-            self.screen_surface.blit(countdown, countdown.get_rect(center=(WIDTH // 2, 70)))
+            self.screen_surface.blit(countdown, countdown.get_rect(center=(WIDTH // 2, 70 * SCALE)))

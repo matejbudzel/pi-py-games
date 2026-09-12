@@ -7,7 +7,8 @@ from pathlib import Path
 
 from common.display import display_settings
 
-WIDTH, HEIGHT = 427, 240
+LOGICAL_WIDTH, LOGICAL_HEIGHT = 427, 240
+WIDTH, HEIGHT = 854, 480
 OUTPUT_SIZE = (854, 480)
 FPS = 30
 

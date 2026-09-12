@@ -16,9 +16,10 @@ from common.joystick_input import JoystickInput
 from .game import Board, SIZE, TileMotion
 
 
-WIDTH, HEIGHT, FPS = 427, 240, 30
+SCALE = 2
+WIDTH, HEIGHT, FPS = 854, 480, 30
 OUTPUT_SIZE = (854, 480)
-CELL, GAP = 44, 4
+CELL, GAP = 44 * SCALE, 4 * SCALE
 BOARD_PIXELS = CELL * SIZE + GAP * (SIZE - 1)
 BOARD_X, BOARD_Y = (WIDTH - BOARD_PIXELS) // 2, (HEIGHT - BOARD_PIXELS) // 2
 ANIMATION_MS = 130
@@ -52,14 +53,14 @@ def _rectangle(row: float, column: float, scale: float = 1.0) -> pygame.Rect:
 
 
 def _draw_tile(screen: pygame.Surface, value: int, rectangle: pygame.Rect, font: pygame.font.Font) -> None:
-    pygame.draw.rect(screen, _tile_color(value), rectangle, border_radius=3)
+    pygame.draw.rect(screen, _tile_color(value), rectangle, border_radius=3 * SCALE)
     text = font.render(str(value), False, (20, 25, 38))
     screen.blit(text, text.get_rect(center=rectangle.center))
 
 
 def _draw(screen: pygame.Surface, board: Board, font: pygame.font.Font, animation: MoveAnimation | None, now: int) -> None:
     screen.fill(BACKGROUND)
-    pygame.draw.rect(screen, (72, 85, 108), pygame.Rect(BOARD_X - 4, BOARD_Y - 4, BOARD_PIXELS + 8, BOARD_PIXELS + 8), border_radius=4)
+    pygame.draw.rect(screen, (72, 85, 108), pygame.Rect(BOARD_X - 4 * SCALE, BOARD_Y - 4 * SCALE, BOARD_PIXELS + 8 * SCALE, BOARD_PIXELS + 8 * SCALE), border_radius=4 * SCALE)
     moving_destinations: set[tuple[int, int]] = set()
     if animation is not None:
         moving_destinations = {motion.destination for motion in animation.motions}
@@ -104,10 +105,10 @@ def main() -> None:
     initialize_pygame(platform_display)
     if platform_display.backend == "pygame":
         pygame.display.set_caption("2048")
-    display = GameDisplay(platform_display, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT))
+    display = GameDisplay(platform_display, OUTPUT_SIZE)
     screen = display.canvas
     clock = pygame.time.Clock()
-    font = pygame.font.Font(SWEET16_FONT_PATH, 16)
+    font = pygame.font.Font(SWEET16_FONT_PATH, 16 * SCALE)
     joystick = JoystickInput() if platform_display.backend == "pygame" else None
     console_input = ConsoleInput() if platform_display.backend == "fbdev" else None
     board = Board.new()
