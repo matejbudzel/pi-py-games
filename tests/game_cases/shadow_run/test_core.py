@@ -11,7 +11,7 @@ from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
 from common.console_input import KEY_SEQUENCES
 from games.shadow_run.main import command_arguments
-from games.shadow_run.app import visible_song_window
+from games.shadow_run.app import App, visible_song_window
 from games.shadow_run.config import load_settings
 
 
@@ -28,6 +28,18 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(KEY_SEQUENCES[b"q"], Action.LEFT)
         self.assertEqual(KEY_SEQUENCES[b"x"], Action.UP)
         self.assertEqual(KEY_SEQUENCES[b"c"], Action.RIGHT)
+
+    def test_individual_pad_buttons_preserve_broad_contacts_until_each_releases(self):
+        app = object.__new__(App)
+        app.pad_buttons, app.held, app.keyboard_until = set(), set(), {}
+        app._record_pad_button(6, True)
+        app._record_pad_button(0, True)
+        app._record_pad_button(3, True)
+        self.assertEqual(lane_contacts(app._contact_actions()), {Lane.LEFT, Lane.RIGHT})
+        app._record_pad_button(6, False)
+        self.assertEqual(lane_contacts(app._contact_actions()), {Lane.LEFT, Lane.RIGHT})
+        app._record_pad_button(0, False)
+        self.assertEqual(lane_contacts(app._contact_actions()), {Lane.RIGHT})
 
     def test_every_outer_pad_column_maps_to_one_broad_lane(self):
         self.assertTrue(all(actions_from_event(pygame.event.Event(pygame.JOYBUTTONDOWN, button=button)) == [Action.LEFT] for button in (6, 0, 4)))

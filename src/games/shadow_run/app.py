@@ -13,7 +13,7 @@ import pygame
 from common.assets import SWEET16_FONT_PATH
 from common.console_input import ConsoleInput
 from common.display import DisplaySettings, GameDisplay, initialize_pygame
-from common.input import Action, DeviceEvent, Release, actions_from_event
+from common.input import Action, DeviceEvent, PAD_ACTIONS, Release, actions_from_event
 from common.joystick_input import JoystickInput
 from common.performance import FrameTiming, PerformanceTracker
 
@@ -89,6 +89,7 @@ class App:
         self.song_labels = {song.audio_path: self._ellipsize_title(song.title) for song in self.songs}
         self.selected, self.first_visible, self.screen, self.running = 0, 0, Screen.LIST, True
         self.held: set[str] = set()
+        self.pad_buttons: set[int] = set()
         self.keyboard_until: dict[str, float] = {}
         self.song: Song | None = None
         self.timeline: TerrainTimeline | None = None
@@ -161,16 +162,24 @@ class App:
         actions: list[Action | Release] = []
         keyboard_action_count = 0
         if self.console:
-            actions = [event for event in self.console.poll_actions() if isinstance(event, (Action, Release))]
+            console_events = self.console.poll_actions()
+            for button, pressed in self.console.pad_button_events:
+                self._record_pad_button(button, pressed)
+            if DeviceEvent.PAD_DISCONNECTED in console_events:
+                self.pad_buttons.clear()
+            actions = [event for event in console_events if isinstance(event, (Action, Release))]
             keyboard_action_count = self.console.keyboard_action_count
         else:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+                if event.type in (pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP):
+                    self._record_pad_button(event.button, event.type == pygame.JOYBUTTONDOWN)
                 if self.joystick:
                     device = self.joystick.handle_event(event)
                     if device is DeviceEvent.PAD_DISCONNECTED:
                         self.held.clear()
+                        self.pad_buttons.clear()
                 actions.extend(actions_from_event(event))
         for index, action in enumerate(actions):
             if isinstance(action, Release):
@@ -215,6 +224,15 @@ class App:
     @staticmethod
     def _direction(action: Action) -> str:
         return {Action.LEFT: "left", Action.RIGHT: "right", Action.UP: "up", Action.DOWN: "down"}.get(action, "")
+
+    def _record_pad_button(self, button: int, pressed: bool) -> None:
+        """Keep individual pad contacts through menus, pauses, and modals."""
+        if button not in (0, 1, 2, 3, 4, 5, 6, 7):
+            return
+        if pressed:
+            self.pad_buttons.add(button)
+        else:
+            self.pad_buttons.discard(button)
 
     def _start(self, song: Song) -> None:
         self.song, self.timeline = song, TerrainTimeline(song.beats, self.seed)
@@ -358,7 +376,8 @@ class App:
     def _contact_actions(self) -> set[str]:
         now = time.monotonic()
         self.keyboard_until = {direction: until for direction, until in self.keyboard_until.items() if until > now}
-        return self.held | set(self.keyboard_until)
+        pad_directions = {self._direction(PAD_ACTIONS[button]) for button in self.pad_buttons}
+        return self.held | set(self.keyboard_until) | pad_directions
 
     def _draw(self) -> list[pygame.Rect] | None:
         surface = self.screen_surface

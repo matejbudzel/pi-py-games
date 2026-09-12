@@ -96,6 +96,10 @@ class ConsoleInput:
             sys.stdout.flush()
 
     def poll_actions(self) -> list[Action | Release | DeviceEvent]:
+        # Keep the physical button edges alongside the action stream.  Games
+        # which need multiple simultaneous mat contacts can derive their own
+        # broad-lane state without losing one contact to another.
+        self.pad_button_events: list[tuple[int, bool]] = []
         keyboard_actions = self._read_keyboard_actions()
         # Consumers which need hold-like keyboard debug input can distinguish
         # these terminal presses from joystick button events (which follow).
@@ -128,9 +132,14 @@ class ConsoleInput:
                 continue
             for offset in range(0, len(data) - JS_EVENT.size + 1, JS_EVENT.size):
                 _, value, event_type, button = JS_EVENT.unpack_from(data, offset)
-                # Initial state packets on reconnect must not press START.
-                if event_type == 1 and button in PAD_ACTIONS:
+                # Initial state packets on reconnect describe the buttons
+                # already held.  Expose them for stateful consumers, but do
+                # not turn them into menu/game actions (especially START).
+                if event_type & 0x7F == 1 and button in PAD_ACTIONS:
                     action = PAD_ACTIONS[button]
+                    self.pad_button_events.append((button, value == 1))
+                    if event_type & 0x80:
+                        continue
                     if value == 1:
                         self._button_events.append(f"button {button} -> {action.name}")
                         self._button_events = self._button_events[-30:]
