@@ -84,6 +84,7 @@ class TerrainGenerator:
         self.stance: Stance = (Lane.LEFT, Lane.CENTER)
         self.last_change = 0.0
         self._beat_index = 0
+        self._due_time = 0.0
 
     def due(self, song_time: float, duration: float) -> bool:
         difficulty = difficulty_at(song_time, duration)
@@ -95,15 +96,21 @@ class TerrainGenerator:
             beat = self.beats[self._beat_index]
             if abs(beat.time - song_time) <= 0.12 and (beat.accent or beat.strength >= 0.55):
                 self._beat_index += 1
+                # Store the source timestamp, rather than the frame/planning
+                # timestamp, so a prepared map has exact musical boundaries.
+                self._due_time = beat.time
                 return True
-        return song_time - self.last_change >= difficulty.min_segment + 1.8
+        if song_time - self.last_change >= difficulty.min_segment + 1.8:
+            self._due_time = song_time
+            return True
+        return False
 
     def advance(self, song_time: float, duration: float) -> Stance | None:
         if not self.due(song_time, duration):
             return None
         choices = reachable_stances(self.stance, include_single_lane=self.rng.random() < difficulty_at(song_time, duration).single_lane_chance)
         self.stance = self.rng.choice(choices)
-        self.last_change = song_time
+        self.last_change = self._due_time
         return self.stance
 
 
@@ -128,6 +135,10 @@ class TerrainTimeline:
             stance = self.generator.advance(self.planned_until, duration)
             if stance is not None:
                 self.changes.append(TerrainChange(self.generator.last_change, stance))
+
+    def prepare_song(self, duration: float) -> None:
+        """Build the complete immutable terrain map before audio begins."""
+        self.plan_to(duration, duration)
 
     def stance_at(self, song_time: float) -> Stance:
         stance = self.initial_stance

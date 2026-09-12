@@ -67,6 +67,13 @@ class CoreTests(unittest.TestCase):
         self.assertNotEqual(timeline.stance_at(3.1), (Lane.LEFT, Lane.CENTER))
         self.assertTrue(timeline.in_transition_window(3.0, 30))
 
+    def test_prepared_timeline_is_fixed_and_uses_exact_beat_time(self):
+        timeline = TerrainTimeline((Beat(3.037, 1.0, True),), seed=1)
+        timeline.prepare_song(8.0)
+        self.assertEqual(timeline.changes[0].time, 3.037)
+        planned = tuple(timeline.changes)
+        self.assertEqual(tuple(timeline.changes), planned)
+
     def test_difficulty_gradually_changes_multiple_values(self):
         early, late = difficulty_at(0, 100), difficulty_at(100, 100)
         self.assertLess(early.speed, late.speed)

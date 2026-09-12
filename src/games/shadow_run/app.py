@@ -130,7 +130,7 @@ class App:
                 if index < keyboard_action_count:
                     # A Linux TTY has no key-up events. Make each debug key
                     # press a visible short contact while pad buttons remain held.
-                    self.keyboard_until[direction] = time.monotonic() + 0.45
+                    self.keyboard_until[direction] = time.monotonic() + 0.9
                 else:
                     self.held.add(direction)
 
@@ -145,6 +145,7 @@ class App:
         self.started_at = 0.0
         self.music_started = False
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
+        self.timeline.prepare_song(song.duration)
         # Decode before the start line reaches the receptor, but remain silent.
         pygame.mixer.music.load(str(song.audio_path))
         self.screen = Screen.PLAYING
@@ -161,8 +162,6 @@ class App:
         if self.screen is not Screen.PLAYING or self.song is None or self.timeline is None:
             return
         if not self.music_started:
-            speed = difficulty_at(0, self.song.duration).speed
-            self.timeline.plan_to((PLAYER_Y - TOP) / speed + 0.5, self.song.duration)
             if time.monotonic() - self.preplay_started_at < PREPLAY_SECONDS:
                 return
             self.started_at = time.monotonic()
@@ -171,10 +170,7 @@ class App:
             self.last_time = 0.0
         now = min(self.song.duration, self._song_time())
         delta = min(0.1, max(0.0, now - self.last_time)); self.last_time = now
-        # Six seconds of look-ahead lets a new safe stance travel visibly from
-        # the top of the waterfall to the receptor before it becomes required.
         speed = difficulty_at(now, self.song.duration).speed
-        self.timeline.plan_to(now + (PLAYER_Y - TOP) / speed + 0.5, self.song.duration)
         expected = self.timeline.stance_at(now)
         if expected != self.active_stance:
             self.active_stance = expected
