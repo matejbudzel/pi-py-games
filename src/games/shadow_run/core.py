@@ -78,6 +78,20 @@ def difficulty_at(song_time: float, duration: float) -> Difficulty:
     return Difficulty(30 + 14 * progress, 2.7 - 0.9 * progress, 0.72 - 0.20 * progress, 0.03 + 0.14 * progress)
 
 
+def scroll_distance(song_time: float, duration: float) -> float:
+    """Pixels travelled under the linear speed curve used by difficulty_at."""
+    time = min(max(song_time, 0.0), duration)
+    return 30.0 * time + 7.0 * time * time / max(duration, 1.0)
+
+
+def time_at_scroll_distance(distance: float, duration: float) -> float:
+    """Inverse of scroll_distance, used while building fixed terrain rows."""
+    distance = max(0.0, distance)
+    duration = max(duration, 1.0)
+    # 7/duration * t² + 30t - distance = 0
+    return min(duration, (-30.0 + (900.0 + 28.0 * distance / duration) ** 0.5) * duration / 14.0)
+
+
 class TerrainGenerator:
     def __init__(self, beats: tuple[Beat, ...] = (), seed: int | None = None) -> None:
         self.beats, self.rng = beats, random.Random(seed)
@@ -139,6 +153,20 @@ class TerrainTimeline:
     def prepare_song(self, duration: float) -> None:
         """Build the complete immutable terrain map before audio begins."""
         self.plan_to(duration, duration)
+
+    def tile_stances(self, duration: float, tile_size: int) -> tuple[Stance, ...]:
+        """Return a fixed stance for every scrolling tile row in a song.
+
+        A row is never recoloured after this preparation step.  Its assigned
+        stance is the one needed when that row reaches the receptor.
+        """
+        if tile_size <= 0:
+            raise ValueError("tile_size must be positive")
+        row_count = int(scroll_distance(duration, duration) / tile_size) + 3
+        return tuple(
+            self.stance_at(time_at_scroll_distance(row * tile_size, duration))
+            for row in range(row_count)
+        )
 
     def stance_at(self, song_time: float) -> Stance:
         stance = self.initial_stance

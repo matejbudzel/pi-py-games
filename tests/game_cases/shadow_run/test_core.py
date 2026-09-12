@@ -6,7 +6,7 @@ import unittest
 import pygame
 from unittest.mock import patch
 
-from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts
+from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts, scroll_distance, time_at_scroll_distance
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
 from common.console_input import KEY_SEQUENCES
@@ -73,6 +73,14 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(timeline.changes[0].time, 3.037)
         planned = tuple(timeline.changes)
         self.assertEqual(tuple(timeline.changes), planned)
+
+    def test_prepared_tile_rows_are_immutable_and_follow_scroll_distance(self):
+        timeline = TerrainTimeline((Beat(3.037, 1.0, True),), seed=1)
+        timeline.prepare_song(8.0)
+        rows = timeline.tile_stances(8.0, 30)
+        self.assertEqual(rows, timeline.tile_stances(8.0, 30))
+        self.assertEqual(time_at_scroll_distance(scroll_distance(3.0, 8.0), 8.0), 3.0)
+        self.assertEqual(rows[0], timeline.initial_stance)
 
     def test_timeline_reports_the_boundary_that_has_crossed_the_receptor(self):
         timeline = TerrainTimeline((Beat(3.0, 1.0, True),), seed=1)

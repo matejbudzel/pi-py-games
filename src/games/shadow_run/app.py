@@ -18,7 +18,7 @@ from common.joystick_input import JoystickInput
 from common.performance import FrameTiming, PerformanceTracker
 
 from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
-from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance, lane_contacts
+from .core import Lane, Stamina, TerrainTimeline, difficulty_at, is_valid_stance, lane_contacts, scroll_distance
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
@@ -94,6 +94,7 @@ class App:
         self.max_backend_present_ms = 0.0
         self.gameplay_base: pygame.Surface | None = None
         self.gameplay_needs_full_present = False
+        self.terrain_rows: tuple[tuple[Lane, Lane], ...] = ()
 
     def close(self) -> None:
         if getattr(self, "song", None) is not None and not self.report_written:
@@ -201,6 +202,7 @@ class App:
         self.music_started = False
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
         self.timeline.prepare_song(song.duration)
+        self.terrain_rows = self.timeline.tile_stances(song.duration, TILE)
         self.gameplay_base = None
         self.gameplay_needs_full_present = True
         # Decode before the start line reaches the receptor, but remain silent.
@@ -330,20 +332,21 @@ class App:
     def _draw_game(self) -> None:
         assert self.song and self.timeline
         now = self._song_time()
-        speed = difficulty_at(now, self.song.duration).speed
-        # The row offset advances every frame. Each row asks the planned
-        # timeline which stance it will require when it reaches the receptor.
         preplay_elapsed = min(PREPLAY_SECONDS, time.monotonic() - self.preplay_started_at)
-        scroll_time = now if self.music_started else preplay_elapsed
-        offset = int(scroll_time * speed) % TILE
         start_y = round(TOP + (PLAYER_Y - TOP) * (preplay_elapsed / PREPLAY_SECONDS))
-        for row in range(-1, 8):
-            y = TOP + offset + row * TILE
-            if not self.music_started:
-                safe = set(Lane) if y >= start_y else set(self.timeline.stance_at(max(0.0, (start_y - y) / speed)))
-            else:
-                terrain_time = now + (PLAYER_Y - y) / speed
-                safe = set(Lane) if terrain_time < 0 else set(self.timeline.stance_at(terrain_time))
+        if self.music_started:
+            distance = int(scroll_distance(now, self.song.duration))
+            first_row = max(0, (PLAYER_Y + distance - HEIGHT) // TILE)
+            last_row = min(len(self.terrain_rows), (PLAYER_Y + distance + TILE) // TILE + 1)
+            rows = ((row, PLAYER_Y + distance - row * TILE, set(self.terrain_rows[row])) for row in range(first_row, last_row))
+        else:
+            # Row zero is the start line.  Safe ground remains below it while
+            # the fixed map above it approaches the player during countdown.
+            rows = (
+                (row, start_y - row * TILE, set(Lane) if row <= 0 else set(self.terrain_rows[row]))
+                for row in range(-3, min(len(self.terrain_rows), 9))
+            )
+        for row, y, safe in rows:
             for lane in Lane:
                 color = SAFE_TILE if lane in safe else DANGER_TILE
                 pygame.draw.rect(self.screen_surface, color, (LANE_X + lane.value * TILE + 1, y + 1, TILE - 2, TILE - 2))
