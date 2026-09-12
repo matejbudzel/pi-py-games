@@ -12,7 +12,7 @@ Pi Dance and 2048 render directly to the native 854×480 game canvas. Shadow Run
 
 During a Shadow Run, Enter, Space, or the pad Start button pauses/resumes. Escape, F1, or Select opens a localized leave confirmation; its `pause_text`, `exit_confirmation_text`, `exit_confirm_button`, and `exit_cancel_button` values live in the `[gameplay]` section of `shadow-run.ini`.
 
-On installation, an optional tiny C extension removes the temporary Python `bytes` allocation used when copying a complete RGB565 frame to `/dev/fb0`. It is deliberately only an accelerator: if it cannot be compiled or loaded, the established Python copy path remains in use.
+On installation, an optional tiny C extension removes the temporary Python `bytes` allocation used when copying a complete RGB565 frame to `/dev/fb0`. It is deliberately only an accelerator: if it cannot be compiled or loaded (for example, a desktop/LXC machine without `Python.h`), installation succeeds and the established Python copy path remains in use. Desktop Pygame games do not use the framebuffer path at all.
 
 For Pi deployment builds, `scripts/cross-build-fbcopy.sh` reuses the sibling launcher's Pi ARMv6 sysroot. Run the launcher's sysroot sync after installing target development headers, then run the script; it emits the target `.so` under `src/common/` for deployment.
 
