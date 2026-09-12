@@ -37,6 +37,8 @@ PICNIC_FINISH_PATH = Path(__file__).parent / "assets" / "picnic-finish.png"
 FOOT_LEFT_PATH = Path(__file__).parent / "assets" / "foot-left.png"
 FOOT_RIGHT_PATH = Path(__file__).parent / "assets" / "foot-right.png"
 FOOT_SIZE = (16, 22)
+RUNNER_READY_PATH = Path(__file__).parent / "assets" / "runner-ready.png"
+RUNNER_JUMP_PATH = Path(__file__).parent / "assets" / "runner-jump.png"
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
@@ -45,6 +47,7 @@ STAMINA_RECT = pygame.Rect(57, 75, 14, 110)
 LEFT_HUD_RECT = pygame.Rect(43, 65, 42, 130)
 PROGRESS_RECT = pygame.Rect(307, 68, 82, 6)
 RIGHT_HUD_RECT = pygame.Rect(295, 45, 106, 48)
+RUNNER_RECT = pygame.Rect(354, 176, 44, 54)
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
@@ -91,6 +94,8 @@ class App:
         self.preplay_safe_row = self._build_preplay_safe_row()
         self.picnic_finish = self._load_terrain_image(PICNIC_FINISH_PATH, (GRID_RECT.width, 64), (75, 145, 68))
         self.foot_ghost, self.foot_ready, self.foot_error = self._load_foot_states()
+        self.runner_ready = self._load_runner(RUNNER_READY_PATH)
+        self.runner_jump = self._load_runner(RUNNER_JUMP_PATH)
         self.result_failed_background = self._load_scene(RESULT_FAILED_PATH, (38, 80, 55))
         self.result_success_background = self._load_scene(RESULT_SUCCESS_PATH, (38, 80, 55))
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
@@ -536,13 +541,23 @@ class App:
 
     def _load_foot(self, path: Path) -> pygame.Surface:
         try:
-            return pygame.transform.scale(pygame.image.load(path).convert_alpha(), FOOT_SIZE)
+            return pygame.transform.scale(pygame.image.load(path), FOOT_SIZE)
         except (OSError, pygame.error):
             logging.getLogger(__name__).warning("Cannot load Shadow Run foot %s", path)
             foot = pygame.Surface(FOOT_SIZE, pygame.SRCALPHA)
             pygame.draw.ellipse(foot, (230, 240, 235), foot.get_rect())
             pygame.draw.ellipse(foot, (21, 57, 58), foot.get_rect(), 1)
             return foot
+
+    def _load_runner(self, path: Path) -> pygame.Surface:
+        try:
+            return pygame.transform.scale(pygame.image.load(path), RUNNER_RECT.size)
+        except (OSError, pygame.error):
+            logging.getLogger(__name__).warning("Cannot load Shadow Run runner %s", path)
+            runner = pygame.Surface(RUNNER_RECT.size, pygame.SRCALPHA)
+            pygame.draw.circle(runner, (240, 184, 130), (22, 13), 9)
+            pygame.draw.rect(runner, (36, 155, 166), (15, 22, 14, 20))
+            return runner
 
     @staticmethod
     def _tint_foot(foot: pygame.Surface, color: tuple[int, int, int], alpha: int) -> pygame.Surface:
@@ -691,7 +706,7 @@ class App:
         self.screen_surface.set_clip(old_clip)
 
     def _gameplay_dirty_rectangles(self) -> list[pygame.Rect]:
-        rectangles = [GRID_RECT, LEFT_HUD_RECT, RIGHT_HUD_RECT]
+        rectangles = [GRID_RECT, LEFT_HUD_RECT, RIGHT_HUD_RECT, RUNNER_RECT]
         if self.debug:
             rectangles.append(DEBUG_RECT)
         return rectangles
@@ -741,8 +756,8 @@ class App:
         pygame.draw.rect(self.screen_surface, (255, 210, 90), (PROGRESS_RECT.x, PROGRESS_RECT.y, int(PROGRESS_RECT.width * progress), PROGRESS_RECT.height))
         score = self.font.render(str(self.score), False, (30, 68, 61))
         self.screen_surface.blit(score, score.get_rect(center=(PROGRESS_RECT.centerx, 60)))
-        if self.timeline.in_transition_window(now, self.song.duration):
-            pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)
+        runner = self.runner_jump if self.timeline.in_transition_window(now, self.song.duration) else self.runner_ready
+        self.screen_surface.blit(runner, RUNNER_RECT)
         if not self.music_started:
             remaining = max(1, int(PREPLAY_SECONDS - preplay_elapsed - 0.001) + 1)
             countdown = self.big_font.render(str(remaining), False, (255, 235, 109))
