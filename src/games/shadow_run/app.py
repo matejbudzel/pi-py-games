@@ -27,6 +27,9 @@ PREPLAY_SECONDS = 3.0
 SAFE_TILE = (37, 105, 62)       # dark grass shadow
 DANGER_TILE = (104, 178, 83)   # sunlit grass
 VISIBLE_SONG_ROWS = 10
+PREVIEW_SIZE = 128
+PREVIEW_RECT = pygame.Rect(282, 76, PREVIEW_SIZE, PREVIEW_SIZE)
+TITLE_RECT = pygame.Rect(34, 0, PREVIEW_RECT.left - 46, 16)
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
@@ -69,6 +72,7 @@ class App:
         self.console = ConsoleInput() if self.platform.backend == "fbdev" else None
         self.songs = discover_songs(settings.song_directory)
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
+        self.song_labels = {song.audio_path: self._ellipsize_title(song.title) for song in self.songs}
         self.selected, self.first_visible, self.screen, self.running = 0, 0, Screen.LIST, True
         self.held: set[str] = set()
         self.keyboard_until: dict[str, float] = {}
@@ -289,11 +293,14 @@ class App:
                 index = self.first_visible + row
                 y = 52 + row * 18
                 if index == self.selected: surface.blit(self.font.render(">", False, (255, 210, 80)), (20, y))
-                surface.blit(self.font.render(song.title[:27], False, (240, 242, 255)), (34, y))
+                if index == self.selected:
+                    self._draw_focused_title(song, y)
+                else:
+                    surface.blit(self.font.render(self.song_labels[song.audio_path], False, (240, 242, 255)), (TITLE_RECT.x, y))
             if self.songs:
                 preview = self.song_covers[self.songs[self.selected].audio_path]
-                pygame.draw.rect(surface, (255, 225, 122), (340, 88, 68, 68), 1)
-                surface.blit(preview, (342, 90))
+                pygame.draw.rect(surface, (255, 225, 122), PREVIEW_RECT.inflate(4, 4), 1)
+                surface.blit(preview, PREVIEW_RECT.topleft)
             return None
         if self.screen is Screen.RESULT:
             self._draw_background(surface)
@@ -329,7 +336,7 @@ class App:
 
     def _load_cover_preview(self, song: Song) -> pygame.Surface:
         """Load once at menu startup; missing covers get original pixel art."""
-        preview = pygame.Surface((64, 64), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
+        preview = pygame.Surface((PREVIEW_SIZE, PREVIEW_SIZE), depth=self.screen_surface.get_bitsize(), masks=self.screen_surface.get_masks())
         if song.cover_path is not None:
             try:
                 cover = pygame.image.load(song.cover_path)
@@ -340,10 +347,34 @@ class App:
                 logging.getLogger(__name__).warning("Cannot load song cover %s", song.cover_path)
         hue = sum(song.title.encode("utf-8")) % 80
         preview.fill((35 + hue // 3, 45, 92 + hue))
-        pygame.draw.rect(preview, (255, 225, 122), (4, 4, 56, 56), 2)
-        pygame.draw.circle(preview, (80, 210, 150), (32, 28), 14)
-        pygame.draw.rect(preview, (50, 125, 90), (10, 46, 44, 10))
+        pygame.draw.rect(preview, (255, 225, 122), (8, 8, 112, 112), 4)
+        pygame.draw.circle(preview, (80, 210, 150), (64, 56), 28)
+        pygame.draw.rect(preview, (50, 125, 90), (20, 92, 88, 20))
         return preview
+
+    def _ellipsize_title(self, title: str) -> str:
+        if self.font.size(title)[0] <= TITLE_RECT.width:
+            return title
+        ellipsis = "..."
+        end = len(title)
+        while end and self.font.size(title[:end] + ellipsis)[0] > TITLE_RECT.width:
+            end -= 1
+        return title[:end] + ellipsis
+
+    def _draw_focused_title(self, song: Song, y: int) -> None:
+        rendered = self.font.render(song.title, False, (255, 210, 80))
+        title_rect = TITLE_RECT.move(0, y)
+        if rendered.get_width() <= title_rect.width:
+            self.screen_surface.blit(rendered, title_rect.topleft)
+            return
+        # A small gap between repetitions makes a looping marquee readable.
+        offset = int(time.monotonic() * 24) % (rendered.get_width() + 20)
+        old_clip = self.screen_surface.get_clip()
+        self.screen_surface.set_clip(title_rect)
+        x = title_rect.x - offset
+        self.screen_surface.blit(rendered, (x, y))
+        self.screen_surface.blit(rendered, (x + rendered.get_width() + 20, y))
+        self.screen_surface.set_clip(old_clip)
 
     def _gameplay_dirty_rectangles(self) -> list[pygame.Rect]:
         rectangles = [GRID_RECT, LEFT_HUD_RECT, RIGHT_HUD_RECT]
