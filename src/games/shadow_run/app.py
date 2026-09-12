@@ -38,10 +38,10 @@ PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
 GRID_RECT = pygame.Rect(LANE_X - 10, 0, TILE * 3 + 20, HEIGHT)
-STAMINA_RECT = pygame.Rect(42, 80, 14, 110)
-LEFT_HUD_RECT = pygame.Rect(28, 70, 42, 130)
-PROGRESS_RECT = pygame.Rect(292, 84, 112, 6)
-RIGHT_HUD_RECT = pygame.Rect(280, 48, 136, 56)
+STAMINA_RECT = pygame.Rect(57, 75, 14, 110)
+LEFT_HUD_RECT = pygame.Rect(43, 65, 42, 130)
+PROGRESS_RECT = pygame.Rect(307, 76, 82, 6)
+RIGHT_HUD_RECT = pygame.Rect(295, 45, 106, 56)
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
@@ -553,7 +553,7 @@ class App:
         pygame.draw.rect(self.screen_surface, (49, 86, 87), PROGRESS_RECT)
         pygame.draw.rect(self.screen_surface, (255, 210, 90), (PROGRESS_RECT.x, PROGRESS_RECT.y, int(PROGRESS_RECT.width * progress), PROGRESS_RECT.height))
         score = self.font.render(str(self.score), False, (30, 68, 61))
-        self.screen_surface.blit(score, score.get_rect(center=(PROGRESS_RECT.centerx, 63)))
+        self.screen_surface.blit(score, score.get_rect(center=(PROGRESS_RECT.centerx, 60)))
         if self.timeline.in_transition_window(now, self.song.duration):
             pygame.draw.rect(self.screen_surface, (230, 240, 255), (LANE_X - 6, PLAYER_Y - 5, TILE * 3 + 12, 15), 1)
         if not self.music_started:
