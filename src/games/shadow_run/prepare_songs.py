@@ -68,7 +68,7 @@ def analyze(path: Path) -> dict[str, object]:
         duration = len(samples) / rate
         if not beats or bpm <= 0:
             duration, bpm, beats = _fallback_analysis(path)
-    return {"schema_version": SCHEMA_VERSION, "analyzer": "librosa-or-wave-fallback", "source": source_info(path), "duration": round(duration, 4), "tempo_bpm": round(bpm, 3), "beats": beats}
+    return {"schema_version": SCHEMA_VERSION, "analyzer": "librosa-or-wave-fallback", "title": path.stem, "source": source_info(path), "duration": round(duration, 4), "tempo_bpm": round(bpm, 3), "beats": beats}
 
 
 def prepare(directory: Path, force: bool = False) -> int:

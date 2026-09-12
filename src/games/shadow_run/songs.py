@@ -40,7 +40,23 @@ def load_song(audio: Path) -> Song | None:
             return None
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return None
-    return Song(audio.stem, audio, sidecar_path_for(audio), duration, tempo, beats)
+    return Song(_title_for(audio, document), audio, sidecar_path_for(audio), duration, tempo, beats)
+
+
+def _title_for(audio: Path, sidecar: dict) -> str:
+    """Prefer prepared title, then an existing dance bundle title, then filename."""
+    for value in (_bundle_title(audio.parent / "song.json"), sidecar.get("title"), audio.stem):
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return audio.stem
+
+
+def _bundle_title(path: Path) -> str | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8")).get("title")
+    except (OSError, ValueError, TypeError):
+        return None
+    return value if isinstance(value, str) else None
 
 
 def discover_songs(directory: Path) -> list[Song]:

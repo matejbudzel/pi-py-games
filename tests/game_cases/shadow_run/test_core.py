@@ -70,3 +70,11 @@ class CoreTests(unittest.TestCase):
             self.assertIsNone(load_song(audio))
             sidecar_path_for(audio).write_text("not json")
             self.assertIsNone(load_song(audio))
+
+    def test_song_uses_existing_bundle_title_when_sidecar_has_no_title(self):
+        with TemporaryDirectory() as temp:
+            bundle = Path(temp) / "ziv-1"; bundle.mkdir()
+            audio = bundle / "song.wav"; audio.write_bytes(b"x")
+            (bundle / "song.json").write_text('{"title": "A Real Song"}')
+            sidecar_path_for(audio).write_text(json.dumps({"schema_version": SCHEMA_VERSION, "source": {"file": "song.wav", "size": 1, "mtime_ns": audio.stat().st_mtime_ns}, "duration": 3, "tempo_bpm": 120, "beats": []}))
+            self.assertEqual(load_song(audio).title, "A Real Song")

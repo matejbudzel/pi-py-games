@@ -146,17 +146,19 @@ class App:
         # decorative pixel stars, fixed so no per-frame asset decoding/allocation
         for x, y in ((20, 18), (92, 49), (330, 24), (400, 110), (45, 180)):
             pygame.draw.rect(surface, (72, 88, 145), (x, y, 2, 2))
-        font = pygame.font.Font(SWEET16_FONT_PATH, 10)
-        big = pygame.font.Font(SWEET16_FONT_PATH, 18)
+        # Sweet16's tiny point sizes become illegible after RGB565 framebuffer
+        # presentation.  Keep every player-facing glyph at its usable size.
+        font = pygame.font.Font(SWEET16_FONT_PATH, 16)
+        big = pygame.font.Font(SWEET16_FONT_PATH, 24)
         if self.screen is Screen.LIST:
             surface.blit(big.render(self.settings.title, False, (255, 225, 122)), (22, 22))
             if not self.songs:
                 surface.blit(font.render("No prepared WAV songs", False, (220, 220, 230)), (22, 72))
             for index, song in enumerate(self.songs[:10]):
-                y = 62 + index * 16
+                y = 52 + index * 18
                 if index == self.selected: surface.blit(font.render(">", False, (255, 210, 80)), (20, y))
-                surface.blit(font.render(song.title[:34], False, (240, 242, 255)), (34, y))
-                surface.blit(font.render(f"{song.duration:.0f}s  {song.tempo_bpm:.0f}", False, (140, 180, 210)), (285, y))
+                surface.blit(font.render(song.title[:27], False, (240, 242, 255)), (34, y))
+                surface.blit(font.render(f"{song.duration:.0f}s {song.tempo_bpm:.0f}", False, (140, 180, 210)), (286, y))
         elif self.screen is Screen.RESULT:
             surface.blit(big.render("*" * self.result_stars, False, (255, 221, 88)), (150, 94))
             pygame.draw.circle(surface, (94, 220, 155), (213, 138), 18)
@@ -164,7 +166,7 @@ class App:
         else:
             self._draw_game(font)
         if self.debug:
-            surface.blit(font.render(f"held={','.join(sorted(self.held))} stance={self.generator.stance if self.generator else ''}", False, (255, 255, 255)), (4, 226))
+            surface.blit(font.render(f"held={','.join(sorted(self.held))} stance={self.generator.stance if self.generator else ''}", False, (255, 255, 255)), (4, 220))
 
     def _draw_game(self, font: pygame.font.Font) -> None:
         assert self.song and self.generator
