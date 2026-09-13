@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pygame
 
-from .assets import Assets
+from .assets import Assets, COVER_SIZE
 from .charts import Note
 from .config import APP_HEIGHT, APP_WIDTH, FOREGROUND, SETTINGS
 from .gameplay import Judgement, Session
@@ -13,20 +13,20 @@ from .songs import Song
 
 
 LANE_DIRECTIONS = ("left", "down", "up", "right")
-LANE_START_X = APP_WIDTH // 2 - 78
 LANE_SPACING = 84
+LANE_START_X = APP_WIDTH // 2 - LANE_SPACING * (len(LANE_DIRECTIONS) - 1) // 2
 HEADER_HEIGHT = 92
 NOTE_TRAVEL_SECONDS = 2.0
 LIST_TEXT_X = 104
-COVER_SIZE = 256
 COVER_X = APP_WIDTH - 40 - COVER_SIZE
-COVER_Y = 118
+COVER_Y = 28
 GAMEPLAY_COVER_POSITION = (16, 108)
 FEEDBACK_CENTER_X = (LANE_START_X + (len(LANE_DIRECTIONS) - 1) * LANE_SPACING + 16 + APP_WIDTH) // 2
 GAMEPLAY_PROGRESS_RECT = pygame.Rect(40, 16, APP_WIDTH - 80, 12)
 GAMEPLAY_LANES_RECT = pygame.Rect(LANE_START_X - 28, HEADER_HEIGHT, LANE_SPACING * 3 + 56, APP_HEIGHT - HEADER_HEIGHT)
 GAMEPLAY_FEEDBACK_RECT = pygame.Rect(660, 100, 170, 145)
 GAMEPLAY_COUNTDOWN_RECT = pygame.Rect(APP_WIDTH // 2 - 70, APP_HEIGHT // 2 - 70, 140, 140)
+COVER_FRAME_COLORS = ((70, 205, 255), (235, 95, 235), (140, 90, 255))
 
 
 def render_splash(screen: pygame.Surface, assets: Assets) -> None:
@@ -55,7 +55,7 @@ def render_song_list(screen: pygame.Surface, assets: Assets, songs: list[Song], 
         return
     if selected < len(songs):
         cover = assets.cover_for(songs[selected])
-        screen.blit(cover, (COVER_X, COVER_Y))
+        _blit_framed_cover(screen, cover, (COVER_X, COVER_Y))
     for menu_row in range(first_visible_row, first_visible_row + visible_rows):
         y = 118 + (menu_row - first_visible_row) * 44
         if menu_row < len(songs):
@@ -95,7 +95,7 @@ def create_gameplay_base(screen: pygame.Surface, assets: Assets, song: Song) -> 
 def render_gameplay_base(screen: pygame.Surface, assets: Assets, song: Song) -> None:
     screen.blit(assets.backdrops["gameplay"], (0, 0))
     _render_gameplay_header_static(screen, assets, song)
-    screen.blit(assets.cover_for(song), GAMEPLAY_COVER_POSITION)
+    _blit_framed_cover(screen, assets.cover_for(song), GAMEPLAY_COVER_POSITION)
     for index, direction in enumerate(LANE_DIRECTIONS):
         center = (LANE_START_X + index * LANE_SPACING, 132)
         receptor = assets.receptors[direction]
@@ -107,7 +107,7 @@ def render_difficulty_selection(screen: pygame.Surface, assets: Assets, song: So
         return
     screen.blit(assets.backdrops["gameplay"], (0, 0))
     _render_gameplay_header_static(screen, assets, song)
-    screen.blit(assets.cover_for(song), GAMEPLAY_COVER_POSITION)
+    _blit_framed_cover(screen, assets.cover_for(song), GAMEPLAY_COVER_POSITION)
     # A sliding row keeps even files with many edit charts readable.
     visible = min(count, 6)
     first = max(0, min(selected - visible // 2, count - visible))
@@ -205,6 +205,13 @@ def render_confirmation_buttons(screen: pygame.Surface, assets: Assets, confirm:
         if selected:
             _blit_chevron(screen, assets, x - 34, y, (255, 150, 100))
         x += text.get_width() + gap
+
+
+def _blit_framed_cover(screen: pygame.Surface, cover: pygame.Surface, position: tuple[int, int]) -> None:
+    screen.blit(cover, position)
+    frame = pygame.Rect(position, cover.get_size())
+    for inset, color in enumerate(COVER_FRAME_COLORS):
+        pygame.draw.rect(screen, color, frame.inflate(-inset * 2, -inset * 2), width=1)
 
 
 def _render_gameplay_header_static(screen: pygame.Surface, assets: Assets, song: Song) -> None:

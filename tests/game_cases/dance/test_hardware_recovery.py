@@ -245,7 +245,7 @@ class AppRecoveryTests(unittest.TestCase):
             song = Song('Example', path, (255, 0, 0), path / 'song.wav', path / 'song.sm', cover, 10)
             with self.assertLogs('pi_dance.assets', level='WARNING'):
                 self.app.assets.reload_covers([song], self.app.screen)
-            self.assertEqual(self.app.assets.cover_for(song).get_size(), (256, 256))
+            self.assertEqual(self.app.assets.cover_for(song).get_size(), (192, 192))
 
     def test_disconnect_preserves_overlap_without_fabricating_lift_edge(self):
         note = Note(1.0, 'up', end_timestamp=3.0, is_lift=True)

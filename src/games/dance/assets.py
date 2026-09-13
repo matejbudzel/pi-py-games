@@ -7,13 +7,14 @@ from pathlib import Path
 
 import pygame
 
-from .config import BACKGROUND, FONT_PATH, FOREGROUND, TITLE
+from .config import FONT_PATH, FOREGROUND, TITLE
 from .gameplay import Judgement
 from .songs import Song, fallback_cover_path
 
 
 GAMEPLAY_ASSET_DIRECTORY = Path(__file__).parent / "assets" / "gameplay"
 BACKDROP_ASSET_DIRECTORY = Path(__file__).parent / "assets" / "backdrops"
+COVER_SIZE = 192
 
 
 class Assets:
@@ -31,7 +32,7 @@ class Assets:
         self.hold_tail = self._make_hold_tail(canvas)
         self.receptor_glows = {direction: pygame.transform.scale(arrow, (42, 42)) for direction, arrow in self.flow_arrows.items()}
         self.feedback_icons = self._load_feedback_icons()
-        self.feedback_patches = self._make_feedback_patches(canvas)
+        self.feedback_patches = self._make_feedback_patches()
         self.draft_star, self.earned_star = self._load_result_stars()
         self.backdrops = self._load_backdrops(canvas)
         self.reload_covers(songs, canvas)
@@ -46,7 +47,7 @@ class Assets:
                 cover = pygame.image.load(fallback_cover_path())
             converted = pygame.Surface(cover.get_size(), depth=canvas.get_bitsize(), masks=canvas.get_masks())
             converted.blit(cover, (0, 0))
-            self.covers[song.path] = pygame.transform.scale(converted, (256, 256))
+            self.covers[song.path] = pygame.transform.scale(converted, (COVER_SIZE, COVER_SIZE))
 
     def cover_for(self, song: Song) -> pygame.Surface:
         return self.covers[song.path]
@@ -98,12 +99,11 @@ class Assets:
             backdrops[name] = pygame.transform.scale_by(converted, 2)
         return backdrops
 
-    def _make_feedback_patches(self, canvas: pygame.Surface) -> dict[Judgement, pygame.Surface]:
-        """Pre-compose large transparent feedback art for the RGB565 game canvas."""
+    def _make_feedback_patches(self) -> dict[Judgement, pygame.Surface]:
+        """Pre-compose feedback art while preserving the transparent icon pixels."""
         patches: dict[Judgement, pygame.Surface] = {}
         for judgement, icon in self.feedback_icons.items():
-            patch = pygame.Surface((170, 145), depth=canvas.get_bitsize(), masks=canvas.get_masks())
-            patch.fill(BACKGROUND)
+            patch = pygame.Surface((170, 145), pygame.SRCALPHA)
             patch.blit(icon, icon.get_rect(midtop=(75, 4)))
             patches[judgement] = patch
         return patches
