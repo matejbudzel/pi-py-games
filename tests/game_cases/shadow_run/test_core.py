@@ -151,7 +151,7 @@ class CoreTests(unittest.TestCase):
         stamina.update(1, 1, False, True)
         self.assertEqual(stamina.value, 100)
         stamina.update(2, 1, False, False)
-        self.assertLess(stamina.value, 100)
+        self.assertEqual(stamina.value, 94)
 
     def test_sidecar_rejects_stale_and_malformed_files(self):
         with TemporaryDirectory() as temp:

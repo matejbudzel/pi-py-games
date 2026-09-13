@@ -210,4 +210,6 @@ class Stamina:
                 self.value = min(100.0, self.value + 4.0 * delta)
         else:
             self.correct_since = None
-            self.value = max(0.0, self.value - 18.0 * delta)
+            # A missed stance should be recoverable for young players: it takes
+            # about three times as long to exhaust the full stamina bar.
+            self.value = max(0.0, self.value - 6.0 * delta)
