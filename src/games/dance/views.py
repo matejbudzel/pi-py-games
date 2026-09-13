@@ -72,9 +72,15 @@ def render_song_list(screen: pygame.Surface, assets: Assets, songs: list[Song], 
 def render_application_exit_confirmation(screen: pygame.Surface, assets: Assets, selected: bool) -> None:
     screen.blit(assets.backdrops["song-list"], (0, 0))
     screen.blit(assets.rainbow_title, (40, 28))
-    message = assets.question_font.render(SETTINGS.exit_confirmation_text, False, FOREGROUND)
-    screen.blit(message, message.get_rect(center=(APP_WIDTH // 2, 200)))
-    render_confirmation_buttons(screen, assets, SETTINGS.exit_confirm_button, SETTINGS.exit_cancel_button, selected, 286)
+    _render_confirmation_block(
+        screen,
+        assets,
+        SETTINGS.exit_confirmation_text,
+        SETTINGS.exit_confirm_button,
+        SETTINGS.exit_cancel_button,
+        selected,
+        (APP_WIDTH // 2, 190),
+    )
 
 
 def render_gameplay(screen: pygame.Surface, assets: Assets, song: Song | None, session: Session | None, audio_seconds: float, song_seconds: float, feedback: Judgement | None, feedback_until: float, glow_until: dict[str, int], now_ms: int) -> None:
@@ -180,20 +186,39 @@ def render_result(screen: pygame.Surface, assets: Assets, song: Song | None, aud
         screen.blit(icon, icon.get_rect(midleft=(477, star_y + 16)))
 
 
-def render_modal(screen: pygame.Surface, assets: Assets, message: str) -> None:
+def render_modal(screen: pygame.Surface, assets: Assets, message: str | None) -> pygame.Rect:
     dimmer = pygame.Surface((APP_WIDTH, APP_HEIGHT), pygame.SRCALPHA)
     dimmer.fill((0, 0, 0, 170))
     screen.blit(dimmer, (0, 0))
     frame = pygame.Rect(220, 162, 414, 156)
     pygame.draw.rect(screen, (20, 20, 26), frame)
     pygame.draw.rect(screen, (230, 230, 230), frame, width=3)
-    text = assets.question_font.render(message, False, FOREGROUND)
-    screen.blit(text, text.get_rect(center=frame.center))
+    if message is not None:
+        text = assets.question_font.render(message, False, FOREGROUND)
+        screen.blit(text, text.get_rect(center=frame.center))
+    return frame
 
 
 def render_song_exit_confirmation(screen: pygame.Surface, assets: Assets, selected: bool) -> None:
-    render_modal(screen, assets, SETTINGS.song_exit_confirmation_text)
-    render_confirmation_buttons(screen, assets, SETTINGS.song_exit_confirm_button, SETTINGS.song_exit_cancel_button, selected, 270)
+    frame = render_modal(screen, assets, None)
+    _render_confirmation_block(
+        screen,
+        assets,
+        SETTINGS.song_exit_confirmation_text,
+        SETTINGS.song_exit_confirm_button,
+        SETTINGS.song_exit_cancel_button,
+        selected,
+        frame.center,
+    )
+
+
+def _render_confirmation_block(screen: pygame.Surface, assets: Assets, message: str, confirm: str, cancel: str, selected: bool, center: tuple[int, int]) -> None:
+    message_surface = assets.question_font.render(message, False, FOREGROUND)
+    gap = 12
+    height = message_surface.get_height() + gap + assets.list_font.get_height()
+    message_rect = message_surface.get_rect(midtop=(center[0], center[1] - height // 2))
+    screen.blit(message_surface, message_rect)
+    render_confirmation_buttons(screen, assets, confirm, cancel, selected, message_rect.bottom + gap)
 
 
 def render_confirmation_buttons(screen: pygame.Surface, assets: Assets, confirm: str, cancel: str, confirm_selected: bool, y: int) -> None:
