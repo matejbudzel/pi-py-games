@@ -94,7 +94,7 @@ class App:
         self.terrain_lawn = self._load_terrain_lawn()
         self.shadow_tiles = self._build_shadow_tiles()
         self.preplay_safe_row = self._build_preplay_safe_row()
-        self.picnic_finish = self._load_terrain_image(PICNIC_FINISH_PATH, (GRID_RECT.width, 64), (75, 145, 68))
+        self.picnic_finish = self._load_transparent_image(PICNIC_FINISH_PATH, (TILE * 3, 64))
         self.foot_ghost, self.foot_detected, self.foot_ready, self.foot_error = self._load_foot_states()
         self.runner_ready = self._load_runner(RUNNER_READY_PATH)
         self.runner_jump = self._load_runner(RUNNER_JUMP_PATH)
@@ -571,6 +571,14 @@ class App:
     def _load_terrain_lawn(self) -> pygame.Surface:
         return self._load_terrain_image(TERRAIN_LAWN_PATH, (TILE * 3, TILE), (104, 178, 83))
 
+    def _load_transparent_image(self, path: Path, size: tuple[int, int]) -> pygame.Surface:
+        """Load a small overlay without flattening its transparent pixels."""
+        try:
+            return pygame.transform.scale(pygame.image.load(path), size)
+        except (OSError, pygame.error):
+            logging.getLogger(__name__).warning("Cannot load Shadow Run transparent asset %s", path)
+            return pygame.Surface(size, pygame.SRCALPHA)
+
     def _load_foot_states(self) -> tuple[dict[str, pygame.Surface], dict[str, pygame.Surface], dict[str, pygame.Surface], dict[str, pygame.Surface]]:
         """Load tiny transparent feet once and cache their three display states."""
         base = {
@@ -788,9 +796,9 @@ class App:
             # bright lawn behind it rather than exposing the dark channel.
             finish_y = PLAYER_Y + distance - len(self.terrain_rows) * TILE
             if -self.picnic_finish.get_height() < finish_y < HEIGHT:
-                for row in range(1, FINISH_SUNNY_ROWS + 1):
+                for row in range(-1, FINISH_SUNNY_ROWS + 1):
                     self.screen_surface.blit(self.terrain_lawn, (LANE_X, finish_y - row * TILE))
-                self.screen_surface.blit(self.picnic_finish, (GRID_RECT.x, finish_y))
+                self.screen_surface.blit(self.picnic_finish, (LANE_X, finish_y))
         else:
             # Row zero is the start line.  Safe ground remains below it while
             # the fixed map above it approaches the player during countdown.
