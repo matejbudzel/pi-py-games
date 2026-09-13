@@ -1,12 +1,13 @@
 from pathlib import Path
 import json
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 
 import pygame
 from unittest.mock import Mock, patch
 
-from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts, scroll_distance, stars_for_performance, time_at_scroll_distance
+from games.shadow_run.core import Beat, Lane, Stamina, TerrainChange, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts, scroll_distance, stars_for_performance, time_at_scroll_distance
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
 from common.console_input import KEY_SEQUENCES
@@ -145,6 +146,24 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(rows, timeline.tile_stances(8.0, 30))
         self.assertEqual(time_at_scroll_distance(scroll_distance(3.0, 8.0), 8.0), 3.0)
         self.assertEqual(rows[0], timeline.initial_stance)
+
+    def test_tile_rows_ignore_stance_segments_shorter_than_one_row(self):
+        timeline = TerrainTimeline(seed=1)
+        brief = (Lane.LEFT, Lane.RIGHT)
+        timeline.changes = [
+            TerrainChange(0.8, brief),
+            TerrainChange(1.1, (Lane.CENTER, Lane.RIGHT)),
+        ]
+        self.assertNotIn(brief, timeline.tile_stances(10, 32))
+
+    def test_receptor_uses_the_row_that_is_visibly_crossing_it(self):
+        app = object.__new__(App)
+        app.song = SimpleNamespace(duration=10)
+        app.timeline = None
+        app.terrain_rows = ((Lane.LEFT, Lane.CENTER), (Lane.CENTER, Lane.RIGHT))
+        self.assertEqual(app._stance_at_receptor(0.01), app.terrain_rows[0])
+        row_one_time = time_at_scroll_distance(32, 10)
+        self.assertEqual(app._stance_at_receptor(row_one_time), app.terrain_rows[1])
 
     def test_timeline_reports_the_boundary_that_has_crossed_the_receptor(self):
         timeline = TerrainTimeline((Beat(3.0, 1.0, True),), seed=1)

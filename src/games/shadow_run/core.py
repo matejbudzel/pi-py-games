@@ -177,23 +177,35 @@ class TerrainTimeline:
         """Return a fixed stance for every scrolling tile row in a song.
 
         A row is never recoloured after this preparation step.  Its assigned
-        stance is the one needed when that row reaches the receptor.
+        stance is the one needed when that row reaches the receptor.  A chart
+        segment shorter than one row cannot be shown honestly, so it is
+        discarded rather than being rounded into a visible requirement.
         """
         if tile_size <= 0:
             raise ValueError("tile_size must be positive")
         row_count = int(scroll_distance(duration, duration) / tile_size) + 3
+        changes = tuple(
+            change for index, change in enumerate(self.changes)
+            if scroll_distance(
+                self.changes[index + 1].time if index + 1 < len(self.changes) else duration,
+                duration,
+            ) - scroll_distance(change.time, duration) >= tile_size
+        )
         return tuple(
-            self.stance_at(time_at_scroll_distance(row * tile_size, duration))
+            self._stance_at(time_at_scroll_distance(row * tile_size, duration), changes)
             for row in range(row_count)
         )
 
-    def stance_at(self, song_time: float) -> Stance:
+    def _stance_at(self, song_time: float, changes: tuple[TerrainChange, ...]) -> Stance:
         stance = self.initial_stance
-        for change in self.changes:
+        for change in changes:
             if change.time > song_time:
                 break
             stance = change.stance
         return stance
+
+    def stance_at(self, song_time: float) -> Stance:
+        return self._stance_at(song_time, tuple(self.changes))
 
     def latest_change_at(self, song_time: float) -> TerrainChange | None:
         latest = None

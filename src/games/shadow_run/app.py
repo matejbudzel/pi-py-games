@@ -54,7 +54,7 @@ PROGRESS_RECT = pygame.Rect(307, 68, 82, 6)
 RIGHT_HUD_RECT = pygame.Rect(295, 45, 106, 48)
 RUNNER_RECT = pygame.Rect(294, 176, 44, 54)
 MOOD_RUNNER_RECT = pygame.Rect(42, 96, 44, 54)
-RESULT_RUNNER_RECT = pygame.Rect(42, 104, 88, 108)
+RESULT_RUNNER_RECT = pygame.Rect(42, 64, 88, 108)
 RESULT_STAR_START_X, RESULT_STAR_Y, RESULT_STAR_SPACING = 180, 64, 30
 STAR_REVEAL_SECONDS = 0.75
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
@@ -483,7 +483,7 @@ class App:
         if not self.terrain_rows or self.song is None:
             return self.timeline.initial_stance if self.timeline is not None else (Lane.LEFT, Lane.CENTER)
         distance = scroll_distance(song_time, self.song.duration)
-        row = 0 if distance < 1 else min(len(self.terrain_rows) - 1, int(distance // TILE) + 1)
+        row = min(len(self.terrain_rows) - 1, int(distance // TILE))
         return self.terrain_rows[row]
 
     def _in_transition_window(self, song_time: float) -> bool:
