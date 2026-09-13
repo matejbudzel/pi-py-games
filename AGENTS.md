@@ -6,6 +6,24 @@ Build the smallest useful kid-friendly DDR-style game that can validate whether 
 
 Prefer a working, understandable MVP over completeness or abstraction.
 
+## Repository workflow
+
+This is a single-developer repository.
+
+- Agents may commit coherent completed changes directly to `main` and push them without opening a pull request.
+- Keep commits focused and understandable; do not mix unrelated cleanup into feature work.
+- Before pushing, run the relevant tests/lint/smoke checks that are practical on the development host.
+- Do not rewrite published history or force-push `main` unless explicitly requested.
+- If a change is intentionally incomplete or known to break an existing entry point, do not push it merely to checkpoint work.
+
+For optional target-device smoke testing, agents may try `ssh pi286`. The expected repository clone on that device is:
+
+`/home/dietpi/pi-py-games`
+
+If the device is reachable, a normal deployment check may pull the current `main` in that clone and run safe, non-destructive smoke tests. Do not make availability of the Pi a prerequisite for normal development, and do not change unrelated device configuration during a game deployment check.
+
+Games intended for the external `pi-games-launcher` must be registered through `src/pi_py_games/provider.py` once their entry point is runnable. Do not expose a provider manifest entry that points to a missing/broken module.
+
 ## Platform contract
 
 - Primary deployment target: Raspberry Pi 1 B+ with 256 MB RAM.
