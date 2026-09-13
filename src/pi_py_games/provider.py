@@ -13,6 +13,7 @@ GAMES = (
     ("pi-dance", "Tancuj, tancuj, vykrúcaj!", "games.dance.main", "PI_DANCE_CONFIG", "config/dance.ini"),
     ("2048", "2048", "games.twenty48.main", "PI_2048_CONFIG", "pi-2048.ini"),
     ("shadow-run", "Shadow Run", "games.shadow_run.main", "PI_SHADOW_RUN_CONFIG", "config/shadow-run.ini"),
+    ("winter-sports", "Winter Sports", "games.winter_sports.main", "PI_WINTER_SPORTS_CONFIG", "config/winter-sports.ini"),
     ("fb-grid-test", "Test LED framebufferu", "games.fb_grid_test.main", "PI_FB_GRID_TEST_CONFIG", "fb-grid-test.ini"),
 )
 

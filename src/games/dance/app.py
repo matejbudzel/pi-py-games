@@ -20,6 +20,7 @@ from common.input import Action, DeviceEvent, Release, actions_from_event
 from common.joystick_input import JoystickInput
 from common.display_monitor import DisplayMonitor
 from common.performance import FrameTiming, PerformanceTracker
+from common.selection import visible_window
 from .songs import Song, discover_songs
 from . import views
 
@@ -567,8 +568,6 @@ class App:
         return len(self.songs) + 1
 
     def _scroll_selection_into_view(self) -> None:
-        selected_row = self.selected if self.selected < len(self.songs) else len(self.songs) + 1
-        if selected_row < self.first_visible_row:
-            self.first_visible_row = selected_row
-        elif selected_row >= self.first_visible_row + self._visible_rows():
-            self.first_visible_row = selected_row - self._visible_rows() + 1
+        self.first_visible_row = visible_window(
+            self.first_visible_row, self.selected, self._menu_item_count(), self._visible_rows()
+        )

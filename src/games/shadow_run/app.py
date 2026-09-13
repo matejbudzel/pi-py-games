@@ -16,6 +16,7 @@ from common.display import DisplaySettings, GameDisplay, initialize_pygame
 from common.input import Action, DeviceEvent, PAD_ACTIONS, Release, actions_from_event
 from common.joystick_input import JoystickInput
 from common.performance import FrameTiming, PerformanceTracker
+from common.selection import visible_window
 
 from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
 from .core import Lane, Stamina, Stance, TerrainTimeline, difficulty_at, is_valid_stance, scroll_distance, stars_for_performance, time_at_scroll_distance
@@ -61,14 +62,8 @@ DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
 def visible_song_window(first_visible: int, selected: int, song_count: int) -> int:
-    """Return the first list index while keeping the selected row on-screen."""
-    if song_count <= VISIBLE_SONG_ROWS:
-        return 0
-    if selected < first_visible:
-        return selected
-    if selected >= first_visible + VISIBLE_SONG_ROWS:
-        return selected - VISIBLE_SONG_ROWS + 1
-    return first_visible
+    """Compatibility name for the shared selection-list viewport rule."""
+    return visible_window(first_visible, selected, song_count, VISIBLE_SONG_ROWS)
 
 
 class Screen(Enum):
