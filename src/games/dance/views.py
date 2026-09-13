@@ -24,7 +24,7 @@ GAMEPLAY_COVER_POSITION = (16, 108)
 FEEDBACK_CENTER_X = (LANE_START_X + (len(LANE_DIRECTIONS) - 1) * LANE_SPACING + 16 + APP_WIDTH) // 2
 GAMEPLAY_PROGRESS_RECT = pygame.Rect(40, 16, APP_WIDTH - 80, 12)
 GAMEPLAY_LANES_RECT = pygame.Rect(LANE_START_X - 28, HEADER_HEIGHT, LANE_SPACING * 3 + 56, APP_HEIGHT - HEADER_HEIGHT)
-GAMEPLAY_FEEDBACK_RECT = pygame.Rect(660, 100, 170, 145)
+GAMEPLAY_FEEDBACK_RECT = pygame.Rect(575, 100, 170, 145)
 GAMEPLAY_COUNTDOWN_RECT = pygame.Rect(APP_WIDTH // 2 - 70, APP_HEIGHT // 2 - 70, 140, 140)
 COVER_FRAME_COLORS = ((70, 205, 255), (235, 95, 235), (140, 90, 255))
 
@@ -111,7 +111,7 @@ def render_difficulty_selection(screen: pygame.Surface, assets: Assets, song: So
     # A sliding row keeps even files with many edit charts readable.
     visible = min(count, 6)
     first = max(0, min(selected - visible // 2, count - visible))
-    left, width = 300, APP_WIDTH - 320
+    left, width = GAMEPLAY_LANES_RECT.x, GAMEPLAY_LANES_RECT.width
     spacing = min(84, width // visible)
     start_x = left + (width - spacing * (visible - 1)) // 2
     for slot, index in enumerate(range(first, first + visible)):
@@ -168,7 +168,7 @@ def render_result(screen: pygame.Surface, assets: Assets, song: Song | None, aud
     screen.blit(assets.backdrops["result"], (0, 0))
     _render_gameplay_header_static(screen, assets, song)
     _render_gameplay_progress(screen, song, audio_seconds)
-    star_y, star_spacing, star_start_x = 222, 40, 253
+    star_y, star_spacing, star_start_x = 222, 40, 285
     for index in range(5):
         screen.blit(assets.draft_star, (star_start_x + index * star_spacing, star_y))
     earned_count = min(stars, (now_ms - started_at) // 500)
@@ -177,7 +177,7 @@ def render_result(screen: pygame.Surface, assets: Assets, song: Song | None, aud
     if earned_count >= stars and stars:
         reaction = Judgement.MISS if stars <= 2 else Judgement.OK if stars <= 4 else Judgement.GREAT
         icon = assets.feedback_icons[reaction]
-        screen.blit(icon, icon.get_rect(midleft=(star_start_x + 5 * star_spacing + 24, star_y + 16)))
+        screen.blit(icon, icon.get_rect(midleft=(477, star_y + 16)))
 
 
 def render_modal(screen: pygame.Surface, assets: Assets, message: str) -> None:
