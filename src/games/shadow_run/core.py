@@ -101,6 +101,16 @@ def time_at_scroll_distance(distance: float, duration: float) -> float:
     return min(duration, (-30.0 + (900.0 + 28.0 * distance / duration) ** 0.5) * duration / 14.0)
 
 
+def stars_for_performance(correct_seconds: float, duration: float, stamina: float) -> int:
+    """Turn hidden run performance into a friendly, always-positive result."""
+    if duration <= 0:
+        return 1
+    correct_ratio = min(1.0, max(0.0, correct_seconds / duration))
+    stamina_ratio = min(1.0, max(0.0, stamina / 100.0))
+    combined = correct_ratio * 0.55 + stamina_ratio * 0.45
+    return 1 + min(4, int(combined * 4 + 0.5))
+
+
 class TerrainGenerator:
     def __init__(self, beats: tuple[Beat, ...] = (), seed: int | None = None) -> None:
         self.beats, self.rng = beats, random.Random(seed)

@@ -6,7 +6,7 @@ import unittest
 import pygame
 from unittest.mock import Mock, patch
 
-from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts, scroll_distance, time_at_scroll_distance
+from games.shadow_run.core import Beat, Lane, Stamina, TerrainGenerator, TerrainTimeline, difficulty_at, is_safe_transition, is_valid_stance, lane_contacts, scroll_distance, stars_for_performance, time_at_scroll_distance
 from games.shadow_run.songs import SCHEMA_VERSION, load_song, sidecar_path_for
 from common.input import Action, actions_from_event
 from common.console_input import KEY_SEQUENCES
@@ -64,6 +64,18 @@ class CoreTests(unittest.TestCase):
         app.screen, app.songs, app.selected, app.first_visible, app.running = Screen.LIST, [object(), object()], 0, 0, True
         app._events()
         self.assertEqual(app.selected, 1)
+
+    def test_mat_direction_changes_leave_confirmation_focus_without_losing_contact(self):
+        app = object.__new__(App)
+        app.console = Mock()
+        app.console.poll_actions.return_value = [Action.LEFT]
+        app.console.pad_button_events = [(0, True)]
+        app.console.keyboard_action_count = 0
+        app.pad_buttons, app.held, app.keyboard_until = set(), set(), {}
+        app.screen, app.leave_confirm_selected, app.running = Screen.LEAVE_CONFIRMATION, False, True
+        app._events()
+        self.assertTrue(app.leave_confirm_selected)
+        self.assertEqual(app.pad_buttons, {0})
 
     def test_pause_and_leave_text_are_configurable(self):
         with TemporaryDirectory() as temp:
@@ -152,6 +164,11 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(stamina.value, 100)
         stamina.update(2, 1, False, False)
         self.assertEqual(stamina.value, 94)
+
+    def test_star_result_combines_correct_time_and_remaining_stamina(self):
+        self.assertEqual(stars_for_performance(60, 60, 100), 5)
+        self.assertEqual(stars_for_performance(0, 60, 0), 1)
+        self.assertEqual(stars_for_performance(30, 60, 50), 3)
 
     def test_sidecar_rejects_stale_and_malformed_files(self):
         with TemporaryDirectory() as temp:

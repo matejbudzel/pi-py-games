@@ -18,7 +18,7 @@ from common.joystick_input import JoystickInput
 from common.performance import FrameTiming, PerformanceTracker
 
 from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
-from .core import Lane, Stamina, Stance, TerrainTimeline, difficulty_at, is_valid_stance, scroll_distance, time_at_scroll_distance
+from .core import Lane, Stamina, Stance, TerrainTimeline, difficulty_at, is_valid_stance, scroll_distance, stars_for_performance, time_at_scroll_distance
 from .songs import Song, discover_songs
 
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
@@ -40,17 +40,23 @@ FOOT_RIGHT_PATH = Path(__file__).parent / "assets" / "foot-right.png"
 FOOT_SIZE = (16, 22)
 RUNNER_READY_PATH = Path(__file__).parent / "assets" / "runner-ready.png"
 RUNNER_JUMP_PATH = Path(__file__).parent / "assets" / "runner-jump.png"
+RUNNER_HAPPY_PATH = Path(__file__).parent / "assets" / "runner-happy.png"
+RUNNER_STRUGGLING_PATH = Path(__file__).parent / "assets" / "runner-struggling.png"
+RUNNER_TIRED_PATH = Path(__file__).parent / "assets" / "runner-tired.png"
 FINISH_SUNNY_ROWS = 6
 FINISH_TERRAIN_PADDING = 24
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "shadow-run-performance.txt"
 # Rows can partially enter above the display and leave below the receptor. Keep the
 # complete vertical lane strip dirty so no old tile edge survives a scroll.
 GRID_RECT = pygame.Rect(LANE_X - 10, 0, TILE * 3 + 20, HEIGHT)
-STAMINA_RECT = pygame.Rect(57, 75, 14, 110)
 LEFT_HUD_RECT = pygame.Rect(43, 65, 42, 130)
 PROGRESS_RECT = pygame.Rect(307, 68, 82, 6)
 RIGHT_HUD_RECT = pygame.Rect(295, 45, 106, 48)
 RUNNER_RECT = pygame.Rect(294, 176, 44, 54)
+MOOD_RUNNER_RECT = pygame.Rect(42, 96, 44, 54)
+RESULT_RUNNER_RECT = pygame.Rect(42, 104, 88, 108)
+RESULT_STAR_START_X, RESULT_STAR_Y, RESULT_STAR_SPACING = 180, 64, 30
+STAR_REVEAL_SECONDS = 0.75
 DEBUG_RECT = pygame.Rect(0, 216, WIDTH, 24)
 
 
@@ -99,6 +105,16 @@ class App:
         self.foot_ghost, self.foot_detected, self.foot_ready, self.foot_error = self._load_foot_states()
         self.runner_ready = self._load_runner(RUNNER_READY_PATH)
         self.runner_jump = self._load_runner(RUNNER_JUMP_PATH)
+        self.runner_happy = self._load_runner(RUNNER_HAPPY_PATH, MOOD_RUNNER_RECT.size)
+        self.runner_struggling = self._load_runner(RUNNER_STRUGGLING_PATH, MOOD_RUNNER_RECT.size)
+        self.runner_tired = self._load_runner(RUNNER_TIRED_PATH, MOOD_RUNNER_RECT.size)
+        self.result_runners = {
+            "happy": self._load_runner(RUNNER_HAPPY_PATH, RESULT_RUNNER_RECT.size),
+            "struggling": self._load_runner(RUNNER_STRUGGLING_PATH, RESULT_RUNNER_RECT.size),
+            "tired": self._load_runner(RUNNER_TIRED_PATH, RESULT_RUNNER_RECT.size),
+        }
+        self.draft_star = self._star_surface((105, 113, 106), (55, 68, 59))
+        self.earned_star = self._star_surface((255, 220, 86), (135, 89, 25))
         self.result_failed_background = self._load_scene(RESULT_FAILED_PATH, (38, 80, 55))
         self.result_success_background = self._load_scene(RESULT_SUCCESS_PATH, (38, 80, 55))
         self.song_covers = {song.audio_path: self._load_cover_preview(song) for song in self.songs}
@@ -121,7 +137,8 @@ class App:
         self.active_stance = None
         self.score = 0
         self.clean_transitions = 0
-        self.result_success = False
+        self.result_stars = 1
+        self.result_started_at = 0.0
         self.performance = PerformanceTracker()
         self.max_audio_step_ms = 0.0
         self.audio_jump_count = 0
@@ -189,7 +206,11 @@ class App:
             keyboard_action_count = self.console.keyboard_action_count
             actions = [
                 event for index, event in enumerate(console_events)
-                if isinstance(event, (Action, Release)) and (index < keyboard_action_count or self.screen is Screen.LIST or not self._is_direction_input(event))
+                if isinstance(event, (Action, Release)) and (
+                    index < keyboard_action_count
+                    or self.screen in (Screen.LIST, Screen.LEAVE_CONFIRMATION)
+                    or not self._is_direction_input(event)
+                )
             ]
         else:
             for event in pygame.event.get():
@@ -204,7 +225,10 @@ class App:
                         self.pad_buttons.clear()
                 mapped = actions_from_event(event)
                 if event.type in (pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP):
-                    mapped = [action for action in mapped if not self._is_direction_input(action)]
+                    mapped = [
+                        action for action in mapped
+                        if self.screen is Screen.LEAVE_CONFIRMATION or not self._is_direction_input(action)
+                    ]
                 actions.extend(mapped)
         for index, action in enumerate(actions):
             if isinstance(action, Release):
@@ -268,7 +292,8 @@ class App:
 
     def _start(self, song: Song) -> None:
         self.song, self.timeline = song, TerrainTimeline(song.beats, self.seed)
-        self.stamina, self.score, self.clean_transitions = Stamina(), 0, 0
+        self.stamina, self.score, self.clean_transitions = Stamina(), 0.0, 0
+        self.result_stars, self.result_started_at = 1, 0.0
         self.preplay_started_at = time.monotonic()
         self.performance = PerformanceTracker()
         self.max_audio_step_ms = 0.0
@@ -396,16 +421,16 @@ class App:
             change_time = max((time for time in self.transition_times if time <= now), default=now)
             self.max_boundary_lateness_ms = max(self.max_boundary_lateness_ms, (now - change_time) * 1000)
             self.clean_transitions += 1
-            self.score += 50 + self.clean_transitions * 3
         contacts = self._contact_counts()
         valid = is_valid_stance(contacts, expected)
         self.stamina.update(now, delta, valid, self._in_transition_window(now))
         if valid:
-            self.score += int(delta * 10)
-        if self.stamina.value <= 0 or now >= self.song.duration or (not pygame.mixer.music.get_busy() and now > 0.5):
-            self.result_success = self.stamina.value > 0
+            self.score += delta
+        if now >= self.song.duration or (not pygame.mixer.music.get_busy() and now > 0.5):
             pygame.mixer.music.stop()
-            self._write_performance_report("complete" if self.result_success else "stamina")
+            self.result_stars = stars_for_performance(self.score, self.song.duration, self.stamina.value)
+            self.result_started_at = time.monotonic()
+            self._write_performance_report("complete")
             self.screen = Screen.RESULT
 
     def _write_performance_report(self, outcome: str) -> None:
@@ -489,13 +514,15 @@ class App:
                 surface.blit(preview, PREVIEW_RECT.topleft)
             return None
         if self.screen is Screen.RESULT:
-            surface.blit(self.result_success_background if self.result_success else self.result_failed_background, (0, 0))
-            if self.result_success:
-                score = self.big_font.render(str(self.score), False, (255, 235, 109))
-                shadow = self.big_font.render(str(self.score), False, (24, 48, 40))
-                score_rect = score.get_rect(center=(WIDTH // 2, 55))
-                surface.blit(shadow, score_rect.move(1, 1))
-                surface.blit(score, score_rect)
+            surface.blit(self.result_success_background, (0, 0))
+            revealed = min(self.result_stars, int((time.monotonic() - self.result_started_at) / STAR_REVEAL_SECONDS))
+            for index in range(5):
+                surface.blit(self.draft_star, (RESULT_STAR_START_X + index * RESULT_STAR_SPACING, RESULT_STAR_Y))
+            for index in range(revealed):
+                surface.blit(self.earned_star, (RESULT_STAR_START_X + index * RESULT_STAR_SPACING, RESULT_STAR_Y))
+            if revealed >= self.result_stars:
+                mood = "happy" if self.result_stars >= 4 else "struggling" if self.result_stars >= 2 else "tired"
+                surface.blit(self.result_runners[mood], RESULT_RUNNER_RECT)
             return None
         if self.gameplay_base is None:
             self.gameplay_base = self._create_gameplay_base()
@@ -603,15 +630,23 @@ class App:
             pygame.draw.ellipse(foot, (21, 57, 58), foot.get_rect(), 1)
             return foot
 
-    def _load_runner(self, path: Path) -> pygame.Surface:
+    def _load_runner(self, path: Path, size: tuple[int, int] = RUNNER_RECT.size) -> pygame.Surface:
         try:
-            return pygame.transform.scale(pygame.image.load(path), RUNNER_RECT.size)
+            return pygame.transform.scale(pygame.image.load(path), size)
         except (OSError, pygame.error):
             logging.getLogger(__name__).warning("Cannot load Shadow Run runner %s", path)
-            runner = pygame.Surface(RUNNER_RECT.size, pygame.SRCALPHA)
-            pygame.draw.circle(runner, (240, 184, 130), (22, 13), 9)
-            pygame.draw.rect(runner, (36, 155, 166), (15, 22, 14, 20))
+            runner = pygame.Surface(size, pygame.SRCALPHA)
+            pygame.draw.circle(runner, (240, 184, 130), (size[0] // 2, size[1] // 4), max(3, size[0] // 5))
+            pygame.draw.rect(runner, (36, 155, 166), (size[0] // 3, size[1] // 2 - 2, size[0] // 3, size[1] // 3))
             return runner
+
+    @staticmethod
+    def _star_surface(fill: tuple[int, int, int], outline: tuple[int, int, int]) -> pygame.Surface:
+        star = pygame.Surface((24, 24), pygame.SRCALPHA)
+        points = ((12, 1), (15, 8), (23, 9), (17, 14), (19, 22), (12, 18), (5, 22), (7, 14), (1, 9), (9, 8))
+        pygame.draw.polygon(star, outline, points)
+        pygame.draw.polygon(star, fill, points, 1)
+        return star
 
     @staticmethod
     def _tint_foot(foot: pygame.Surface, color: tuple[int, int, int], alpha: int) -> pygame.Surface:
@@ -824,14 +859,11 @@ class App:
             pygame.draw.line(self.screen_surface, (255, 235, 109), (x, start_line_y), (x + TILE, start_line_y), 2)
         transition_open = self._in_transition_window(now)
         self._draw_receptors(self._stance_at_receptor(now), self._contact_counts(), transition_open)
-        pygame.draw.rect(self.screen_surface, (42, 43, 43), STAMINA_RECT)
-        pygame.draw.rect(self.screen_surface, (83, 220, 130), (STAMINA_RECT.x, STAMINA_RECT.bottom - int(self.stamina.value), STAMINA_RECT.width, int(self.stamina.value)))
-        pygame.draw.rect(self.screen_surface, (223, 237, 205), STAMINA_RECT, 1)
+        mood_runner = self.runner_happy if self.stamina.value >= 70 else self.runner_struggling if self.stamina.value >= 35 else self.runner_tired
+        self.screen_surface.blit(mood_runner, MOOD_RUNNER_RECT)
         progress = self._song_time() / self.song.duration
         pygame.draw.rect(self.screen_surface, (49, 86, 87), PROGRESS_RECT)
         pygame.draw.rect(self.screen_surface, (255, 210, 90), (PROGRESS_RECT.x, PROGRESS_RECT.y, int(PROGRESS_RECT.width * progress), PROGRESS_RECT.height))
-        score = self.font.render(str(self.score), False, (30, 68, 61))
-        self.screen_surface.blit(score, score.get_rect(center=(PROGRESS_RECT.centerx, 60)))
         runner = self.runner_jump if transition_open else self.runner_ready
         self.screen_surface.blit(runner, RUNNER_RECT)
         if not self.music_started:
