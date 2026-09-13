@@ -51,6 +51,10 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F1)), [Action.SELECT])
         self.assertIs(KEY_SEQUENCES[b"\x1bOP"], Action.SELECT)
 
+    def test_f2_is_the_development_jump_to_ending_action(self):
+        self.assertEqual(actions_from_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F2)), [Action.DEBUG_JUMP_END])
+        self.assertIs(KEY_SEQUENCES[b"\x1bOQ"], Action.DEBUG_JUMP_END)
+
     def test_joystick_directions_navigate_the_song_list(self):
         app = object.__new__(App)
         app.console = Mock()

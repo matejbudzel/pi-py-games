@@ -19,6 +19,7 @@ class Action(Enum):
     DEBUG_RESULT_4 = auto()
     DEBUG_RESULT_5 = auto()
     DEBUG_TOGGLE_PERFORMANCE = auto()
+    DEBUG_JUMP_END = auto()
 
 
 KEY_ACTIONS = {
@@ -46,6 +47,7 @@ KEY_ACTIONS = {
     pygame.K_4: Action.DEBUG_RESULT_4,
     pygame.K_5: Action.DEBUG_RESULT_5,
     pygame.K_F8: Action.DEBUG_TOGGLE_PERFORMANCE,
+    pygame.K_F2: Action.DEBUG_JUMP_END,
 }
 
 

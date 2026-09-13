@@ -24,6 +24,7 @@ from .songs import Song, discover_songs
 MIXER_FREQUENCY, MIXER_BUFFER = 22050, 2048
 LANE_X, TILE, PLAYER_Y = 165, 32, 202
 PREPLAY_SECONDS = 3.0
+DEBUG_END_LEAD_SECONDS = 6.5
 VISIBLE_SONG_ROWS = 10
 PREVIEW_SIZE = 128
 PREVIEW_RECT = pygame.Rect(282, 76, PREVIEW_SIZE, PREVIEW_SIZE)
@@ -109,6 +110,7 @@ class App:
         self.timeline: TerrainTimeline | None = None
         self.stamina = Stamina()
         self.started_at = 0.0
+        self.playback_origin = 0.0
         self.preplay_started_at = 0.0
         self.music_started = False
         self.pause_started_at = 0.0
@@ -218,6 +220,8 @@ class App:
                     self.screen = Screen.LIST
                 else:
                     self.running = False
+            elif action is Action.DEBUG_JUMP_END and self.screen is Screen.PLAYING:
+                self._jump_to_ending()
             elif self.screen is Screen.LIST:
                 if action is Action.UP and self.songs:
                     self.selected = (self.selected - 1) % len(self.songs)
@@ -276,6 +280,7 @@ class App:
         self.total_backend_present_ms = 0.0
         self.max_backend_present_ms = 0.0
         self.started_at = 0.0
+        self.playback_origin = 0.0
         self.music_started = False
         self.pause_started_at = 0.0
         self.last_time = 0.0; self.active_stance = self.timeline.initial_stance; self.held.clear(); self.keyboard_until.clear()
@@ -300,6 +305,24 @@ class App:
         if self.music_started:
             pygame.mixer.music.pause()
         self.screen = Screen.PAUSED
+        self.gameplay_needs_full_present = True
+
+    def _jump_to_ending(self) -> None:
+        """Developer shortcut: replay the final seconds without a full run."""
+        assert self.song is not None
+        if not self.music_started:
+            return
+        target = max(0.0, self.song.duration - DEBUG_END_LEAD_SECONDS)
+        try:
+            pygame.mixer.music.play(start=target)
+        except pygame.error:
+            # Some SDL_mixer builds cannot seek WAV. The game clock still
+            # jumps, which is enough to exercise the final terrain sequence.
+            pygame.mixer.music.play()
+        self.playback_origin = target
+        self.started_at = time.monotonic()
+        self.last_time = target
+        self.active_stance = self._stance_at_receptor(target)
         self.gameplay_needs_full_present = True
 
     def _resume(self) -> None:
@@ -346,7 +369,7 @@ class App:
         # get_pos follows mixer playback; monotonic protects startup/platform quirks.
         position = pygame.mixer.music.get_pos()
         fallback = time.monotonic() - self.started_at
-        return max(0.0, (position / 1000 if position >= 0 else fallback) + self.settings.timing_offset_ms / 1000)
+        return max(0.0, self.playback_origin + (position / 1000 if position >= 0 else fallback) + self.settings.timing_offset_ms / 1000)
 
     def _update(self) -> None:
         if self.screen is not Screen.PLAYING or self.song is None or self.timeline is None:

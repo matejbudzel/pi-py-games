@@ -43,6 +43,8 @@ KEY_SEQUENCES = {
     b"\x1b[D": Action.LEFT,
     b"\x1bOD": Action.LEFT,
     b"\x1b[19~": Action.DEBUG_TOGGLE_PERFORMANCE,
+    b"\x1bOQ": Action.DEBUG_JUMP_END,
+    b"\x1b[12~": Action.DEBUG_JUMP_END,
     b"\r": Action.START,
     b"\n": Action.START,
     b" ": Action.START,
