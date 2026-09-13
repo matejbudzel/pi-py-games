@@ -6,3 +6,4 @@ __pycache__/
 pi-py-games.ini
 config/*.ini
 .pytest_cache/
+/research/
