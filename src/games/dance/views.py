@@ -30,6 +30,7 @@ GAMEPLAY_COUNTDOWN_RECT = pygame.Rect(APP_WIDTH // 2 - 70, APP_HEIGHT // 2 - 70,
 
 
 def render_splash(screen: pygame.Surface, assets: Assets) -> None:
+    screen.blit(assets.backdrops["splash"], (0, 0))
     screen.blit(assets.rainbow_title, assets.rainbow_title.get_rect(center=(APP_WIDTH // 2, APP_HEIGHT // 2)))
 
 
@@ -45,6 +46,7 @@ def render_performance_hud(screen: pygame.Surface, assets: Assets, timing: Frame
 
 
 def render_song_list(screen: pygame.Surface, assets: Assets, songs: list[Song], selected: int, first_visible_row: int, visible_rows: int) -> None:
+    screen.blit(assets.backdrops["song-list"], (0, 0))
     screen.blit(assets.rainbow_title, (40, 28))
     if not songs:
         shrug = assets.shrug_font.render(r"\_(^_^)_/", False, FOREGROUND)
@@ -68,6 +70,7 @@ def render_song_list(screen: pygame.Surface, assets: Assets, songs: list[Song], 
 
 
 def render_application_exit_confirmation(screen: pygame.Surface, assets: Assets, selected: bool) -> None:
+    screen.blit(assets.backdrops["song-list"], (0, 0))
     screen.blit(assets.rainbow_title, (40, 28))
     message = assets.question_font.render(SETTINGS.exit_confirmation_text, False, FOREGROUND)
     screen.blit(message, message.get_rect(center=(APP_WIDTH // 2, 200)))
@@ -90,6 +93,7 @@ def create_gameplay_base(screen: pygame.Surface, assets: Assets, song: Song) -> 
 
 
 def render_gameplay_base(screen: pygame.Surface, assets: Assets, song: Song) -> None:
+    screen.blit(assets.backdrops["gameplay"], (0, 0))
     _render_gameplay_header_static(screen, assets, song)
     screen.blit(assets.cover_for(song), GAMEPLAY_COVER_POSITION)
     for index, direction in enumerate(LANE_DIRECTIONS):
@@ -101,6 +105,7 @@ def render_gameplay_base(screen: pygame.Surface, assets: Assets, song: Song) -> 
 def render_difficulty_selection(screen: pygame.Surface, assets: Assets, song: Song | None, count: int, selected: int) -> None:
     if song is None or count == 0:
         return
+    screen.blit(assets.backdrops["gameplay"], (0, 0))
     _render_gameplay_header_static(screen, assets, song)
     screen.blit(assets.cover_for(song), GAMEPLAY_COVER_POSITION)
     # A sliding row keeps even files with many edit charts readable.
@@ -160,6 +165,7 @@ def render_countdown(screen: pygame.Surface, assets: Assets, remaining: int) -> 
 def render_result(screen: pygame.Surface, assets: Assets, song: Song | None, audio_seconds: float, stars: int, started_at: int, now_ms: int) -> None:
     if song is None:
         return
+    screen.blit(assets.backdrops["result"], (0, 0))
     _render_gameplay_header_static(screen, assets, song)
     _render_gameplay_progress(screen, song, audio_seconds)
     star_y, star_spacing, star_start_x = 222, 40, 253

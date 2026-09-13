@@ -13,6 +13,7 @@ from .songs import Song, fallback_cover_path
 
 
 GAMEPLAY_ASSET_DIRECTORY = Path(__file__).parent / "assets" / "gameplay"
+BACKDROP_ASSET_DIRECTORY = Path(__file__).parent / "assets" / "backdrops"
 
 
 class Assets:
@@ -32,6 +33,7 @@ class Assets:
         self.feedback_icons = self._load_feedback_icons()
         self.feedback_patches = self._make_feedback_patches(canvas)
         self.draft_star, self.earned_star = self._load_result_stars()
+        self.backdrops = self._load_backdrops(canvas)
         self.reload_covers(songs, canvas)
 
     def reload_covers(self, songs: list[Song], canvas: pygame.Surface) -> None:
@@ -84,6 +86,17 @@ class Assets:
         earned = star.copy()
         earned.fill((255, 220, 45), special_flags=pygame.BLEND_RGBA_MULT)
         return draft, earned
+
+    @staticmethod
+    def _load_backdrops(canvas: pygame.Surface) -> dict[str, pygame.Surface]:
+        """Load the 427x240 pixel-art backdrops at their native 2x canvas size."""
+        backdrops = {}
+        for name in ("splash", "song-list", "gameplay", "result"):
+            image = pygame.image.load(BACKDROP_ASSET_DIRECTORY / f"{name}.png")
+            converted = pygame.Surface(image.get_size(), depth=canvas.get_bitsize(), masks=canvas.get_masks())
+            converted.blit(image, (0, 0))
+            backdrops[name] = pygame.transform.scale_by(converted, 2)
+        return backdrops
 
     def _make_feedback_patches(self, canvas: pygame.Surface) -> dict[Judgement, pygame.Surface]:
         """Pre-compose large transparent feedback art for the RGB565 game canvas."""
