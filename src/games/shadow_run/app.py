@@ -802,7 +802,9 @@ class App:
                 - (self.picnic_finish.get_height() - TILE + FINISH_TERRAIN_PADDING)
             )
             if -self.picnic_finish.get_height() < finish_y < HEIGHT:
-                for row in range(-1, FINISH_SUNNY_ROWS + 1):
+                # One extra base row starts immediately below the artwork and
+                # fills its virtual lawn padding before the final terrain row.
+                for row in range(-2, FINISH_SUNNY_ROWS + 1):
                     self.screen_surface.blit(self.terrain_lawn, (LANE_X, finish_y - row * TILE))
                 self.screen_surface.blit(self.picnic_finish, (LANE_X, finish_y))
         else:
