@@ -85,6 +85,7 @@ class SpeedSkatingRun:
     travelled: float = 0.0
     collisions: int = 0
     reverse_warning: bool = False
+    wall_contact: bool = False
 
     def __post_init__(self) -> None:
         self.start_distance = self.oval.lap_metres - self.oval.start_before_finish
@@ -101,7 +102,7 @@ class SpeedSkatingRun:
         if gesture.right_pressed and gesture.left:
             self.balance += self.oval.imbalance_gain
         self.balance *= max(0.0, 1.0 - dt / (self.oval.inertia * 1.6))
-        line_distance, _, _, line_error = closest_centerline(self.oval, self.x, self.y)
+        line_distance, center_x, center_y, line_error = closest_centerline(self.oval, self.x, self.y)
         _, _, ideal_heading = point_at(self.oval, line_distance)
         direction_error = abs(sin(self.heading - ideal_heading))
         self.reverse_warning = cos(self.heading - ideal_heading) < 0.0
@@ -118,14 +119,24 @@ class SpeedSkatingRun:
         self.speed = max(0.0, min(15.5, self.speed))
         # Heading is never pulled toward the track.  It changes only through
         # player input, and can point anywhere—including a warned reverse.
-        self.heading -= self.balance * (1.3 + self.speed * .10) * dt
+        turn_multiplier = 3.8 if self.wall_contact else 1.0
+        self.heading -= self.balance * (1.3 + self.speed * .10) * turn_multiplier * dt
         self.previous_x, self.previous_y = self.x, self.y
         self.x += cos(self.heading) * self.speed * dt
         self.y += sin(self.heading) * self.speed * dt
         self.travelled += self.speed * dt
-        if line_error > self.oval.track_width / 2:
+        _, center_x, center_y, line_error = closest_centerline(self.oval, self.x, self.y)
+        self.wall_contact = line_error > self.oval.track_width / 2
+        if self.wall_contact:
+            # A collision is costly but never strands the skater beyond the
+            # border.  Put them just inside the lane along the collision ray.
+            away_x, away_y = self.x - center_x, self.y - center_y
+            length = max(.001, (away_x * away_x + away_y * away_y) ** .5)
+            safe_distance = self.oval.track_width * .42
+            self.x = center_x + away_x / length * safe_distance
+            self.y = center_y + away_y / length * safe_distance
             self.speed *= self.oval.wall_speed_factor
-            self.balance *= -.35
+            self.balance *= .75
             self.collisions += 1
 
     @property

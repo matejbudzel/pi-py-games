@@ -7,7 +7,7 @@ from games.winter_sports.courses import COURSES, PROFILES
 from games.winter_sports.core import Run
 from games.winter_sports.gestures import GestureTracker
 from games.winter_sports.tuning import DEFAULTS, load, save
-from games.winter_sports.speed_skating import LONG_TRACK, SHORT_TRACK, SpeedSkatingRun, point_at
+from games.winter_sports.speed_skating import LONG_TRACK, SHORT_TRACK, SpeedSkatingRun, closest_centerline, point_at
 
 
 class WinterSportsTests(unittest.TestCase):
@@ -54,3 +54,5 @@ class WinterSportsTests(unittest.TestCase):
         run.update(.1, standing)
         self.assertLess(run.speed, 10 * SHORT_TRACK.wall_speed_factor)
         self.assertEqual(run.collisions, 1)
+        _, _, _, line_error = closest_centerline(SHORT_TRACK, run.x, run.y)
+        self.assertLess(line_error, SHORT_TRACK.track_width / 2)

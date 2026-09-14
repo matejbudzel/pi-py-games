@@ -180,7 +180,11 @@ class App:
             if (line_x - run.x) ** 2 + (line_y - run.y) ** 2 < (WIDTH / scale) ** 2:
                 a, b = screen_point(distance, -oval.track_width / 2), screen_point(distance, oval.track_width / 2)
                 pygame.draw.line(self.canvas, color, a, b, 2)
-        pygame.draw.rect(self.canvas, (240, 70, 60), pygame.Rect(center[0] - 4, center[1] - 4, 8, 8))
+        pygame.draw.rect(self.canvas, (240, 70, 60), pygame.Rect(center[0] - 5, center[1] - 5, 10, 10))
+        tip = (round(center[0] + cos(run.heading) * 8), round(center[1] + sin(run.heading) * 8))
+        left = (round(center[0] + cos(run.heading + 2.5) * 5), round(center[1] + sin(run.heading + 2.5) * 5))
+        right = (round(center[0] + cos(run.heading - 2.5) * 5), round(center[1] + sin(run.heading - 2.5) * 5))
+        pygame.draw.polygon(self.canvas, (255, 235, 120), (tip, left, right))
         self.draw_speed_hud(run)
 
     def draw_speed_hud(self, run: SpeedSkatingRun) -> None:
