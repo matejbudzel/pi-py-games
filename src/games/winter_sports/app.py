@@ -39,6 +39,9 @@ class App:
         if self.sport in ("Short track", "Speed skating"):
             return ("cadence", "curve_loss", "airborne_loss", "inertia", "imbalance", "wall")
         return ("wind", "steering", "balance", "cadence")
+    @property
+    def tuning_profile(self) -> str:
+        return {"Short track": "short_track", "Speed skating": "speed_skating"}.get(self.sport, "default")
     def run_loop(self) -> None:
         last = time.monotonic()
         while self.running:
@@ -65,36 +68,24 @@ class App:
     def navigate(self, delta: int) -> None:
         if self.screen is Screen.SPORTS:
             self.selected=move_selection(self.selected,delta,len(self.sports)); self.first=visible_window(self.first,self.selected,len(self.sports),8)
+            self.tuning = load(self.settings.tuning_path, self.tuning_profile)
         elif self.screen is Screen.COURSES: self.course_selected=move_selection(self.course_selected,delta,len(COURSES[self.sport]))
         elif self.screen is Screen.TUNING: self.tune_selected=move_selection(self.tune_selected,delta,len(self.tuning_keys)+1)
     def adjust(self, delta: float) -> None:
         keys=self.tuning_keys
         if self.tune_selected < len(keys):
-            key=keys[self.tune_selected]; self.tuning[key]=round(max(0,min(2,self.tuning[key]+delta)),1); save(self.settings.tuning_path,self.tuning)
+            key=keys[self.tune_selected]; self.tuning[key]=round(max(0,min(2,self.tuning[key]+delta)),1); save(self.settings.tuning_path,self.tuning,self.tuning_profile)
     def confirm(self) -> None:
         if self.screen is Screen.SPORTS: self.screen=Screen.COURSES
         elif self.screen is Screen.COURSES: self.screen=Screen.TUNING
         elif self.screen is Screen.TUNING:
-            if self.tune_selected == len(self.tuning_keys): self.tuning=dict(DEFAULTS); save(self.settings.tuning_path,self.tuning)
-            else: self.screen=Screen.COUNTDOWN; self.countdown_started=time.monotonic()
+            if self.tune_selected == len(self.tuning_keys): self.tuning=dict(DEFAULTS); save(self.settings.tuning_path,self.tuning,self.tuning_profile)
+            else:
+                self._prepare_run()
+                self.screen=Screen.COUNTDOWN; self.countdown_started=time.monotonic()
         elif self.screen is Screen.RESULT: self.screen=Screen.SPORTS
     def update(self, now: float, dt: float) -> None:
         if self.screen is Screen.COUNTDOWN and now-self.countdown_started >= 3:
-            if self.sport in ("Short track", "Speed skating"):
-                oval = SPEED_EVENTS[(self.sport, self.course.name)]
-                self.speed_run = SpeedSkatingRun(replace(
-                    oval,
-                    cadence_gain=oval.cadence_gain * self.tuning["cadence"],
-                    curve_loss=oval.curve_loss * self.tuning["curve_loss"],
-                    airborne_loss=oval.airborne_loss * self.tuning["airborne_loss"],
-                    inertia=oval.inertia * self.tuning["inertia"],
-                    imbalance_gain=oval.imbalance_gain * self.tuning["imbalance"],
-                    wall_speed_factor=min(.95, oval.wall_speed_factor * self.tuning["wall"]),
-                ))
-                self.run = None
-            else:
-                self.run=Run(self.course,PROFILES[self.sport],self.tuning.copy(),self.seed)
-                self.speed_run = None
             self.screen=Screen.EVENT
         if self.screen is Screen.EVENT and self.speed_run:
             self.latest_gesture = self.gestures.update(self.held, now)
@@ -104,6 +95,22 @@ class App:
         if self.screen is Screen.EVENT and self.run:
             self.run.update(dt,self.gestures.update(self.held,now),self.sport)
             if self.run.complete: self.screen=Screen.RESULT
+
+    def _prepare_run(self) -> None:
+        if self.sport in ("Short track", "Speed skating"):
+            oval = SPEED_EVENTS[(self.sport, self.course.name)]
+            self.speed_run = SpeedSkatingRun(replace(
+                oval, cadence_gain=oval.cadence_gain * self.tuning["cadence"],
+                curve_loss=oval.curve_loss * self.tuning["curve_loss"],
+                airborne_loss=oval.airborne_loss * self.tuning["airborne_loss"],
+                inertia=oval.inertia * self.tuning["inertia"],
+                imbalance_gain=oval.imbalance_gain * self.tuning["imbalance"],
+                wall_speed_factor=min(.95, oval.wall_speed_factor * self.tuning["wall"]),
+            ))
+            self.run = None
+        else:
+            self.run = Run(self.course, PROFILES[self.sport], self.tuning.copy(), self.seed)
+            self.speed_run = None
     def text(self, value: str, x: int, y: int, selected=False, big=False) -> None:
         self.canvas.blit((self.big if big else self.font).render(value,False,(255,220,90) if selected else (235,245,255)),(x,y))
     def draw(self) -> None:
@@ -117,7 +124,10 @@ class App:
         elif self.screen is Screen.TUNING:
             self.text(self.sport,22,18,big=True)
             for index,key in enumerate(list(self.tuning_keys)+["Reset defaults"]): self.text(("> " if index==self.tune_selected else "  ")+key+("  %.1f"%self.tuning[key] if key in self.tuning else ""),25,54+index*22,index==self.tune_selected)
-        elif self.screen is Screen.COUNTDOWN: self.text(str(max(1,3-int(time.monotonic()-self.countdown_started))),205,105,big=True)
+        elif self.screen is Screen.COUNTDOWN:
+            if self.speed_run: self.draw_speed_skating()
+            elif self.run: self.draw_run()
+            self.text(str(max(1,3-int(time.monotonic()-self.countdown_started))),205,105,big=True)
         elif self.speed_run:
             self.draw_speed_skating()
             if self.screen is Screen.RESULT:
@@ -157,7 +167,7 @@ class App:
         # Keep the short track intimate—the 111 m oval is physically compact—
         # while the 400 m oval needs a wider world view to keep its curves
         # readable.  Neither mode attempts to show the entire lap.
-        scale = 12.0 if oval.lap_metres < 200 else 4.8
+        scale = 12.0 if oval.lap_metres < 200 else 7.2
         line_distance, _, _, _ = closest_centerline(oval, run.x, run.y)
         center = (WIDTH // 2, HEIGHT // 2)
 

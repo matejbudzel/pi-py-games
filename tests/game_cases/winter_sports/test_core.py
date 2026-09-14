@@ -36,6 +36,9 @@ class WinterSportsTests(unittest.TestCase):
             self.assertEqual(load(path), DEFAULTS)
             save(path, {**DEFAULTS, "wind": 1.2, "unused": 9})
             self.assertEqual(load(path)["wind"], 1.2)
+            save(path, {**DEFAULTS, "cadence": 1.7}, "short_track")
+            self.assertEqual(load(path, "short_track")["cadence"], 1.7)
+            self.assertEqual(load(path, "speed_skating")["cadence"], DEFAULTS["cadence"])
 
     def test_shared_list_window_keeps_last_row_visible(self):
         self.assertEqual(visible_window(0, 9, 10, 4), 6)
