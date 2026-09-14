@@ -95,13 +95,21 @@ class SpeedSkatingRun:
     def update(self, dt: float, gesture: GestureFrame) -> None:
         self.elapsed += dt
         both, one = gesture.left and gesture.right, gesture.left != gesture.right
-        # Right-foot strokes while the left stays planted apply a left turn;
-        # left-foot strokes do the mirror-image correction.
+        # Direction and balance are deliberately separate controls.  Right
+        # strokes with a planted left foot turn left; left strokes turn right.
+        # Those same strokes tip balance toward their side, increasingly so at
+        # speed.  An opposite stroke can therefore cancel the previous tip.
+        turn_impulse = .34 * (2.2 if self.wall_contact else 1.0)
+        balance_impulse = self.oval.imbalance_gain * (.35 + self.speed / 9.0)
         if gesture.left_pressed and gesture.right:
-            self.balance -= self.oval.imbalance_gain
+            self.heading += turn_impulse
+            self.balance -= balance_impulse
         if gesture.right_pressed and gesture.left:
-            self.balance += self.oval.imbalance_gain
-        self.balance *= max(0.0, 1.0 - dt / (self.oval.inertia * 1.6))
+            self.heading -= turn_impulse
+            self.balance += balance_impulse
+        # Standing still does not preserve a lean forever: balance quietly
+        # returns to center, but high-speed strokes are harder to absorb.
+        self.balance *= max(0.0, 1.0 - dt / (self.oval.inertia * .85))
         line_distance, center_x, center_y, line_error = closest_centerline(self.oval, self.x, self.y)
         _, _, ideal_heading = point_at(self.oval, line_distance)
         direction_error = abs(sin(self.heading - ideal_heading))
@@ -117,10 +125,10 @@ class SpeedSkatingRun:
             drag = self.oval.airborne_loss * (1.0 + gesture.airborne_seconds * 3.5)
         self.speed += (thrust - drag - self.speed / (18 * self.oval.inertia)) * dt
         self.speed = max(0.0, min(15.5, self.speed))
-        # Heading is never pulled toward the track.  It changes only through
-        # player input, and can point anywhere—including a warned reverse.
-        turn_multiplier = 3.8 if self.wall_contact else 1.0
-        self.heading -= self.balance * (1.3 + self.speed * .10) * turn_multiplier * dt
+        # Heading is never pulled toward the track.  Balance is only a small
+        # secondary steering influence, so it cannot drive the player through
+        # a bend by itself.
+        self.heading -= self.balance * .24 * dt
         self.previous_x, self.previous_y = self.x, self.y
         self.x += cos(self.heading) * self.speed * dt
         self.y += sin(self.heading) * self.speed * dt

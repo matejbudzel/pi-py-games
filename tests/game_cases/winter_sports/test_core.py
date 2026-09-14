@@ -56,3 +56,16 @@ class WinterSportsTests(unittest.TestCase):
         self.assertEqual(run.collisions, 1)
         _, _, _, line_error = closest_centerline(SHORT_TRACK, run.x, run.y)
         self.assertLess(line_error, SHORT_TRACK.track_width / 2)
+
+    def test_cadence_turns_direction_and_balance_self_centers(self):
+        run = SpeedSkatingRun(SHORT_TRACK, speed=9)
+        tracker = GestureTracker()
+        tracker.update({"left"}, 1.0)
+        right_stroke = tracker.update({"left", "right"}, 1.1)
+        heading_before = run.heading
+        run.update(.1, right_stroke)
+        self.assertLess(run.heading, heading_before)
+        tipped_balance = run.balance
+        for tick in range(20):
+            run.update(.1, tracker.update({"left", "right"}, 1.2 + tick / 10))
+        self.assertLess(abs(run.balance), abs(tipped_balance))

@@ -200,11 +200,9 @@ class App:
         for x, pressed in ((377, gesture.left), (402, gesture.right)):
             pygame.draw.circle(self.canvas, (245, 230, 100) if pressed else (55, 85, 110), (x, 72), 7)
             pygame.draw.circle(self.canvas, (235, 245, 255), (x, 72), 7, 1)
-        # Balance is a direction/edge indicator: vertical is efficient, and a
-        # sideways tip warns that the next step will give less acceleration.
-        line_distance, _, _, _ = closest_centerline(run.oval, run.x, run.y)
-        _, _, ideal_heading = point_at(run.oval, line_distance)
-        angle = max(-1.25, min(1.25, run.heading - ideal_heading))
+        # This is balance, not direction: the triangle on the skater shows
+        # direction while this line shows the current left/right body tip.
+        angle = max(-1.25, min(1.25, run.balance))
         base, tip = (352, 74), (round(352 + sin(angle) * 15), round(74 - cos(angle) * 15))
         pygame.draw.line(self.canvas, (255, 220, 90), base, tip, 2)
         pygame.draw.circle(self.canvas, (255, 220, 90), tip, 3)
