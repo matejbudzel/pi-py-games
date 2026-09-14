@@ -153,7 +153,11 @@ class App:
     def draw_speed_skating(self) -> None:
         """Render a fixed-orientation local camera through a real stadium oval."""
         assert self.speed_run
-        run, oval, scale = self.speed_run, self.speed_run.oval, 3.0
+        run, oval = self.speed_run, self.speed_run.oval
+        # Keep the short track intimate—the 111 m oval is physically compact—
+        # while the 400 m oval needs a wider world view to keep its curves
+        # readable.  Neither mode attempts to show the entire lap.
+        scale = 8.0 if oval.lap_metres < 200 else 3.2
         player_x, player_y, _ = point_at(oval, run.distance, run.offset)
         center = (WIDTH // 2, HEIGHT // 2)
 
