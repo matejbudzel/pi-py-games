@@ -19,7 +19,10 @@ class App:
         platform = DisplaySettings(settings.display_backend, settings.framebuffer_device)
         initialize_pygame(platform)
         self.display = GameDisplay(platform, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT)); self.canvas = self.display.canvas
-        self.font = pygame.font.Font(SWEET16_FONT_PATH, 12); self.big = pygame.font.Font(SWEET16_FONT_PATH, 20)
+        # Sweet16 was drawn for these native pixel sizes.  Rendering it at 12
+        # and 20 produces uneven glyph strokes after the canvas is doubled.
+        self.font = pygame.font.Font(SWEET16_FONT_PATH, 16)
+        self.big = pygame.font.Font(SWEET16_FONT_PATH, 24)
         self.clock, self.running, self.screen, self.held = pygame.time.Clock(), True, Screen.SPORTS, set()
         self.sports, self.selected, self.first = list(COURSES), 0, 0
         self.course_selected = self.tune_selected = 0; self.tuning = load(settings.tuning_path); self.countdown_started = 0.0
@@ -90,7 +93,30 @@ class App:
         elif self.run:
             self.draw_run()
             if self.screen is Screen.RESULT:
-                self.text("★"*self.run.stars()+"☆"*(5-self.run.stars()),145,95,big=True); self.text("❄",202,130,big=True)
+                self.draw_result_stars(self.run.stars())
+                self.draw_snowflake(WIDTH // 2, 136)
+
+    def draw_result_stars(self, earned: int) -> None:
+        """Draw result symbols ourselves: Sweet16 intentionally has no Unicode stars."""
+        for index in range(5):
+            center = (145 + index * 34, 105)
+            color = (255, 220, 90) if index < earned else (98, 130, 153)
+            self.draw_star(center, color)
+
+    def draw_star(self, center: tuple[int, int], color: tuple[int, int, int]) -> None:
+        x, y = center
+        points = ((x, y - 10), (x + 3, y - 3), (x + 10, y - 3), (x + 5, y + 2),
+                  (x + 7, y + 9), (x, y + 5), (x - 7, y + 9), (x - 5, y + 2),
+                  (x - 10, y - 3), (x - 3, y - 3))
+        pygame.draw.polygon(self.canvas, color, points)
+
+    def draw_snowflake(self, x: int, y: int) -> None:
+        """A simple landmark instead of a missing-font-glyph box."""
+        color = (235, 245, 255)
+        pygame.draw.line(self.canvas, color, (x - 10, y), (x + 10, y), 2)
+        pygame.draw.line(self.canvas, color, (x, y - 10), (x, y + 10), 2)
+        pygame.draw.line(self.canvas, color, (x - 7, y - 7), (x + 7, y + 7), 2)
+        pygame.draw.line(self.canvas, color, (x - 7, y + 7), (x + 7, y - 7), 2)
     def draw_run(self) -> None:
         assert self.run
         cx=WIDTH//2; pygame.draw.line(self.canvas,(245,250,255),(70,230),(cx,10),3); pygame.draw.line(self.canvas,(245,250,255),(357,230),(cx,10),3)
