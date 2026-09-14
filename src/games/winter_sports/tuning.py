@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-DEFAULTS = {"wind": 0.35, "steering": 1.0, "balance": 1.0, "cadence": 1.0}
+DEFAULTS = {
+    "wind": 0.35, "steering": 1.0, "balance": 1.0, "cadence": 1.0,
+    "curve_loss": 1.0, "airborne_loss": 1.0, "inertia": 1.0,
+    "imbalance": 1.0, "wall": 1.0,
+}
 def load(path: Path) -> dict[str, float]:
     try:
         saved = json.loads(path.read_text(encoding="utf-8"))

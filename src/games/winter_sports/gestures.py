@@ -18,6 +18,8 @@ class GestureFrame:
     landed: bool
     landing_asymmetry: float
     row_transition: int
+    left_pressed: bool = False
+    right_pressed: bool = False
 
 
 class GestureTracker:
@@ -35,6 +37,8 @@ class GestureTracker:
         self.contacts = set(held)
         left, right = "left" in held, "right" in held
         row = 1 if "up" in held else -1 if "down" in held else 0
+        left_pressed = left and "left" not in previous
+        right_pressed = right and "right" not in previous
         for side, active in (("left", left), ("right", right)):
             if active and side not in previous:
                 old = self.last_step[side]
@@ -58,4 +62,4 @@ class GestureTracker:
         symmetry = 0.0 if last_l is None or last_r is None else min(1.0, abs(last_l - last_r) / .35)
         transition = row - self.previous_row
         self.previous_row, self.row = row, row
-        return GestureFrame(left, right, row, cadence, regularity, symmetry, float(right) - float(left), airborne, air_time, landed, symmetry, transition)
+        return GestureFrame(left, right, row, cadence, regularity, symmetry, float(right) - float(left), airborne, air_time, landed, symmetry, transition, left_pressed, right_pressed)
