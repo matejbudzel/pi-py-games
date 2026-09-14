@@ -48,7 +48,8 @@ class WinterSportsTests(unittest.TestCase):
             self.assertAlmostEqual(start[1], finish[1], places=3)
 
     def test_both_contacts_brake_and_wall_collision_costs_speed(self):
-        run = SpeedSkatingRun(SHORT_TRACK, speed=10, offset=SHORT_TRACK.track_width)
+        run = SpeedSkatingRun(SHORT_TRACK, speed=10)
+        run.y += 100
         standing = GestureTracker().update({"left", "right"}, 1)
         run.update(.1, standing)
         self.assertLess(run.speed, 10 * SHORT_TRACK.wall_speed_factor)

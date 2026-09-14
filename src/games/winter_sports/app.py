@@ -12,7 +12,7 @@ from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
 from .courses import COURSES, PROFILES
 from .core import Run
 from .gestures import GestureTracker
-from .speed_skating import OVALS, SpeedSkatingRun, point_at
+from .speed_skating import OVALS, SpeedSkatingRun, closest_centerline, point_at
 from .tuning import DEFAULTS, load, save
 
 class Screen(Enum): SPORTS = auto(); COURSES = auto(); TUNING = auto(); COUNTDOWN = auto(); EVENT = auto(); RESULT = auto()
@@ -158,26 +158,28 @@ class App:
         # while the 400 m oval needs a wider world view to keep its curves
         # readable.  Neither mode attempts to show the entire lap.
         scale = 8.0 if oval.lap_metres < 200 else 3.2
-        player_x, player_y, _ = point_at(oval, run.distance, run.offset)
+        line_distance, _, _, _ = closest_centerline(oval, run.x, run.y)
         center = (WIDTH // 2, HEIGHT // 2)
 
         def screen_point(distance: float, offset: float) -> tuple[int, int]:
             world_x, world_y, _ = point_at(oval, distance, offset)
-            return (round(center[0] + (world_x - player_x) * scale), round(center[1] + (world_y - player_y) * scale))
+            return (round(center[0] + (world_x - run.x) * scale), round(center[1] + (world_y - run.y) * scale))
 
         # Two separately sampled racing-line offsets form the inner and outer
         # oval borders.  The camera translates only; it never rotates.
         for offset in (-oval.track_width / 2, oval.track_width / 2):
-            points = [screen_point(run.distance - 100 + 200 * index / 100, offset) for index in range(101)]
+            points = [screen_point(line_distance - 100 + 200 * index / 100, offset) for index in range(101)]
             pygame.draw.lines(self.canvas, (245, 250, 255), False, points, 2)
         for offset in (-oval.track_width / 4, oval.track_width / 4):
-            points = [screen_point(run.distance - 100 + 200 * index / 80, offset) for index in range(81)]
+            points = [screen_point(line_distance - 100 + 200 * index / 80, offset) for index in range(81)]
             pygame.draw.lines(self.canvas, (110, 170, 205), False, points, 1)
         # The line is both start and finish, rendered whenever it is near the
         # player.  It crosses the complete width of the ice lane.
-        if min(run.distance % oval.lap_metres, oval.lap_metres - run.distance % oval.lap_metres) < 35:
-            a, b = screen_point(0, -oval.track_width / 2), screen_point(0, oval.track_width / 2)
-            pygame.draw.line(self.canvas, (255, 205, 70), a, b, 2)
+        for distance, color in ((0.0, (255, 205, 70)), (run.start_distance, (100, 230, 140))):
+            line_x, line_y, _ = point_at(oval, distance)
+            if (line_x - run.x) ** 2 + (line_y - run.y) ** 2 < (WIDTH / scale) ** 2:
+                a, b = screen_point(distance, -oval.track_width / 2), screen_point(distance, oval.track_width / 2)
+                pygame.draw.line(self.canvas, color, a, b, 2)
         pygame.draw.rect(self.canvas, (240, 70, 60), pygame.Rect(center[0] - 4, center[1] - 4, 8, 8))
         self.draw_speed_hud(run)
 
@@ -186,19 +188,24 @@ class App:
         self.text("WR %.3f" % oval.record_seconds, 7, 7)
         self.text("%05.2f" % run.elapsed, 336, 7)
         self.text("%04.1f m/s" % run.speed, 324, 26)
+        self.text("%04dm" % run.travelled, 348, 45)
         # Contact circles deliberately remain in the HUD as input diagnostics.
         gesture = self.latest_gesture
         if gesture is None:
             return
         for x, pressed in ((377, gesture.left), (402, gesture.right)):
-            pygame.draw.circle(self.canvas, (245, 230, 100) if pressed else (55, 85, 110), (x, 53), 7)
-            pygame.draw.circle(self.canvas, (235, 245, 255), (x, 53), 7, 1)
+            pygame.draw.circle(self.canvas, (245, 230, 100) if pressed else (55, 85, 110), (x, 72), 7)
+            pygame.draw.circle(self.canvas, (235, 245, 255), (x, 72), 7, 1)
         # Balance is a direction/edge indicator: vertical is efficient, and a
         # sideways tip warns that the next step will give less acceleration.
-        angle = max(-1.25, min(1.25, run.balance))
-        base, tip = (352, 55), (round(352 + sin(angle) * 15), round(55 - cos(angle) * 15))
+        line_distance, _, _, _ = closest_centerline(run.oval, run.x, run.y)
+        _, _, ideal_heading = point_at(run.oval, line_distance)
+        angle = max(-1.25, min(1.25, run.heading - ideal_heading))
+        base, tip = (352, 74), (round(352 + sin(angle) * 15), round(74 - cos(angle) * 15))
         pygame.draw.line(self.canvas, (255, 220, 90), base, tip, 2)
         pygame.draw.circle(self.canvas, (255, 220, 90), tip, 3)
+        if run.reverse_warning and int(run.elapsed * 6) % 2 == 0:
+            pygame.draw.rect(self.canvas, (250, 65, 55), self.canvas.get_rect(), 4)
     def draw_run(self) -> None:
         assert self.run
         cx=WIDTH//2; pygame.draw.line(self.canvas,(245,250,255),(70,230),(cx,10),3); pygame.draw.line(self.canvas,(245,250,255),(357,230),(cx,10),3)
