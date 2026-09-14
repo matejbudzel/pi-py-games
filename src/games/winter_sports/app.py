@@ -1,6 +1,7 @@
 from __future__ import annotations
 from enum import Enum, auto
 from dataclasses import replace
+from math import cos, sin
 import time
 import pygame
 from common.assets import SWEET16_FONT_PATH
