@@ -157,7 +157,7 @@ class App:
         # Keep the short track intimate—the 111 m oval is physically compact—
         # while the 400 m oval needs a wider world view to keep its curves
         # readable.  Neither mode attempts to show the entire lap.
-        scale = 8.0 if oval.lap_metres < 200 else 3.2
+        scale = 12.0 if oval.lap_metres < 200 else 4.8
         line_distance, _, _, _ = closest_centerline(oval, run.x, run.y)
         center = (WIDTH // 2, HEIGHT // 2)
 
