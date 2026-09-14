@@ -12,7 +12,7 @@ from .config import FPS, HEIGHT, OUTPUT_SIZE, WIDTH, Settings
 from .courses import COURSES, PROFILES
 from .core import Run
 from .gestures import GestureTracker
-from .speed_skating import OVALS, SpeedSkatingRun, closest_centerline, point_at
+from .speed_skating import SPEED_EVENTS, SpeedSkatingRun, closest_centerline, format_time, point_at
 from .tuning import DEFAULTS, load, save
 
 class Screen(Enum): SPORTS = auto(); COURSES = auto(); TUNING = auto(); COUNTDOWN = auto(); EVENT = auto(); RESULT = auto()
@@ -36,7 +36,7 @@ class App:
     def course(self): return COURSES[self.sport][self.course_selected]
     @property
     def tuning_keys(self) -> tuple[str, ...]:
-        if self.sport == "Speed skating":
+        if self.sport in ("Short track", "Speed skating"):
             return ("cadence", "curve_loss", "airborne_loss", "inertia", "imbalance", "wall")
         return ("wind", "steering", "balance", "cadence")
     def run_loop(self) -> None:
@@ -80,8 +80,8 @@ class App:
         elif self.screen is Screen.RESULT: self.screen=Screen.SPORTS
     def update(self, now: float, dt: float) -> None:
         if self.screen is Screen.COUNTDOWN and now-self.countdown_started >= 3:
-            if self.sport == "Speed skating":
-                oval = OVALS[self.course.name]
+            if self.sport in ("Short track", "Speed skating"):
+                oval = SPEED_EVENTS[(self.sport, self.course.name)]
                 self.speed_run = SpeedSkatingRun(replace(
                     oval,
                     cadence_gain=oval.cadence_gain * self.tuning["cadence"],
@@ -175,7 +175,7 @@ class App:
             pygame.draw.lines(self.canvas, (110, 170, 205), False, points, 1)
         # The line is both start and finish, rendered whenever it is near the
         # player.  It crosses the complete width of the ice lane.
-        for distance, color in ((0.0, (255, 205, 70)), (run.start_distance, (100, 230, 140))):
+        for distance, color in ((oval.finish_distance, (255, 205, 70)), (run.start_distance, (100, 230, 140))):
             line_x, line_y, _ = point_at(oval, distance)
             if (line_x - run.x) ** 2 + (line_y - run.y) ** 2 < (WIDTH / scale) ** 2:
                 a, b = screen_point(distance, -oval.track_width / 2), screen_point(distance, oval.track_width / 2)
@@ -189,8 +189,8 @@ class App:
 
     def draw_speed_hud(self, run: SpeedSkatingRun) -> None:
         oval = run.oval
-        self.text("WR %.3f" % oval.record_seconds, 7, 7)
-        self.text("%05.2f" % run.elapsed, 336, 7)
+        self.text("WR " + format_time(oval.record_seconds), 7, 7)
+        self.text(format_time(run.elapsed), 336, 7)
         self.text("%04.1f m/s" % run.speed, 324, 26)
         self.text("%04dm" % run.travelled, 348, 45)
         # Contact circles deliberately remain in the HUD as input diagnostics.

@@ -22,6 +22,12 @@ class Oval:
     wall_speed_factor: float
     record_seconds: float
     start_before_finish: float
+    race_metres: float
+
+    @property
+    def finish_distance(self) -> float:
+        """The middle of the bottom straight is the universal finish line."""
+        return self.straight_metres / 2
 
     @property
     def target_seconds(self) -> float:
@@ -30,9 +36,24 @@ class Oval:
 
 # 111.12 m is the ISU short-track racing line: two 30.427 m straights and
 # two 8 m-radius semicircles.  A 400 m long track uses 25 m-radius turns.
-SHORT_TRACK = Oval("Short Track", 111.12, 8.0, 30.427, 7.0, 8.8, 1.20, 1.7, 1.3, .24, .12, 41.399, 55.56)
-LONG_TRACK = Oval("Large Oval", 400.0, 25.0, 121.460, 8.0, 6.6, .42, 1.1, 3.8, .15, .10, 36.09, 100.0)
-OVALS = {SHORT_TRACK.name: SHORT_TRACK, LONG_TRACK.name: LONG_TRACK}
+SHORT_TRACK = Oval("Short Track", 111.12, 8.0, 30.427, 7.0, 8.8, 1.20, 1.7, 1.3, .24, .12, 41.399, 55.56, 500.0)
+LONG_TRACK = Oval("Large Oval", 400.0, 25.0, 121.460, 8.0, 6.6, .42, 1.1, 3.8, .15, .10, 36.09, 100.0, 500.0)
+
+# Women's current ISU records, in seconds.  The game uses one consistent
+# reference category and has no gendered player character.
+SPEED_EVENTS = {
+    ("Short track", "500 m"): SHORT_TRACK,
+    ("Short track", "1000 m"): Oval("Short Track", 111.12, 8.0, 30.427, 7.0, 8.8, 1.20, 1.7, 1.3, .24, .12, 85.958, 0.0, 1000.0),
+    ("Short track", "1500 m"): Oval("Short Track", 111.12, 8.0, 30.427, 7.0, 8.8, 1.20, 1.7, 1.3, .24, .12, 134.354, 55.44, 1500.0),
+    ("Speed skating", "500 m"): LONG_TRACK,
+    ("Speed skating", "1000 m"): Oval("Large Oval", 400.0, 25.0, 121.460, 8.0, 6.6, .42, 1.1, 3.8, .15, .10, 71.61, 200.0, 1000.0),
+    ("Speed skating", "1500 m"): Oval("Large Oval", 400.0, 25.0, 121.460, 8.0, 6.6, .42, 1.1, 3.8, .15, .10, 109.83, 300.0, 1500.0),
+}
+
+
+def format_time(seconds: float) -> str:
+    minutes, remainder = divmod(seconds, 60)
+    return "%d:%05.2f" % (minutes, remainder) if minutes else "%.3f" % seconds
 
 
 def point_at(oval: Oval, distance: float, offset: float = 0.0) -> tuple[float, float, float]:
@@ -88,7 +109,7 @@ class SpeedSkatingRun:
     wall_contact: bool = False
 
     def __post_init__(self) -> None:
-        self.start_distance = self.oval.lap_metres - self.oval.start_before_finish
+        self.start_distance = (self.oval.finish_distance - self.oval.start_before_finish) % self.oval.lap_metres
         self.x, self.y, self.heading = point_at(self.oval, self.start_distance)
         self.previous_x, self.previous_y = self.x, self.y
 
@@ -152,7 +173,7 @@ class SpeedSkatingRun:
         # The player must cross the fixed finish line in the correct direction,
         # not simply accumulate enough movement while circling somewhere else.
         crosses_finish = self.previous_x < 0 <= self.x and abs(self.y - self.oval.turn_radius) < self.oval.track_width
-        return self.travelled >= 500.0 and crosses_finish and not self.reverse_warning
+        return self.travelled >= self.oval.race_metres and crosses_finish and not self.reverse_warning
 
     def stars(self) -> int:
         ratio = self.elapsed / self.oval.target_seconds

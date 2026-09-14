@@ -7,7 +7,7 @@ from games.winter_sports.courses import COURSES, PROFILES
 from games.winter_sports.core import Run
 from games.winter_sports.gestures import GestureTracker
 from games.winter_sports.tuning import DEFAULTS, load, save
-from games.winter_sports.speed_skating import LONG_TRACK, SHORT_TRACK, SpeedSkatingRun, closest_centerline, point_at
+from games.winter_sports.speed_skating import LONG_TRACK, SHORT_TRACK, SPEED_EVENTS, SpeedSkatingRun, closest_centerline, point_at
 
 
 class WinterSportsTests(unittest.TestCase):
@@ -46,6 +46,12 @@ class WinterSportsTests(unittest.TestCase):
             finish = point_at(oval, oval.lap_metres)
             self.assertAlmostEqual(start[0], finish[0], places=3)
             self.assertAlmostEqual(start[1], finish[1], places=3)
+
+    def test_every_event_finishes_at_the_bottom_straight_center(self):
+        for oval in SPEED_EVENTS.values():
+            x, y, _ = point_at(oval, oval.finish_distance)
+            self.assertAlmostEqual(x, 0.0, places=3)
+            self.assertAlmostEqual(y, oval.turn_radius, places=3)
 
     def test_both_contacts_brake_and_wall_collision_costs_speed(self):
         run = SpeedSkatingRun(SHORT_TRACK, speed=10)
