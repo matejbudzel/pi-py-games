@@ -124,9 +124,9 @@ class App:
             rect = pygame.Rect(x, y, 64, 64); self._thumbnail(page, rect)
             if index == self.selected: pygame.draw.rect(self.screen, (255, 219, 84), rect.inflate(4, 4), 2)
         page = self.page
-        panel_x, content_x = 231, 265
+        panel_x, content_x = 231, 257
         pygame.draw.line(self.screen, (87, 95, 125), (panel_x, 0), (panel_x, HEIGHT))
-        self._thumbnail(page, pygame.Rect(content_x, 28, 128, 128))
+        self._thumbnail(page, pygame.Rect(content_x, 10, 144, 144))
         self._text(self.bold_font, page.title, (content_x, 166))
         self._text(font, f"{page.color_count} colors", (content_x, 186))
         # Reserve a stable 8x2 palette block.  Empty slots remain transparent,
