@@ -186,8 +186,18 @@ class App:
     def _modal(self, font, small):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); overlay.fill((0,0,0,175)); self.screen.blit(overlay,(0,0))
         rect=pygame.Rect(125,85,177,70); pygame.draw.rect(self.screen,(57,64,91),rect); pygame.draw.rect(self.screen,WHITE,rect,1)
-        self._text(font, "LEAVE?", (WIDTH//2,98), center=True)
-        self._text(small, "YES", (170,130), (255,219,84) if self.modal=="yes" else WHITE); self._text(small,"NO",(235,130),(255,219,84) if self.modal=="no" else WHITE)
+        question = self.bold_font.render("LEAVE?", False, WHITE)
+        yes = small.render("YES", False, (255,219,84) if self.modal=="yes" else WHITE)
+        no = small.render("NO", False, (255,219,84) if self.modal=="no" else WHITE)
+        gap = 16
+        block_height = question.get_height() + 6 + max(yes.get_height(), no.get_height())
+        top = rect.centery - block_height // 2
+        self.screen.blit(question, question.get_rect(center=(rect.centerx, top + question.get_height() // 2)))
+        buttons_width = yes.get_width() + gap + no.get_width()
+        buttons_x = rect.centerx - buttons_width // 2
+        buttons_y = top + question.get_height() + 6
+        self.screen.blit(yes, (buttons_x, buttons_y))
+        self.screen.blit(no, (buttons_x + yes.get_width() + gap, buttons_y))
 
     def run(self) -> None:
         settings=display_settings(); initialize_pygame(settings)
