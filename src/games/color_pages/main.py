@@ -124,14 +124,16 @@ class App:
             rect = pygame.Rect(x, y, 64, 64); self._thumbnail(page, rect)
             if index == self.selected: pygame.draw.rect(self.screen, (255, 219, 84), rect.inflate(4, 4), 2)
         page = self.page
-        panel = pygame.Rect(231, 0, 196, HEIGHT)
-        pygame.draw.rect(self.screen, (45, 51, 75), panel)
-        pygame.draw.rect(self.screen, (87, 95, 125), panel, 1)
-        self._thumbnail(page, pygame.Rect(265, 32, 128, 128))
-        self._text(self.bold_font, page.title, (247, 172))
-        self._text(font, f"{page.color_count} colors", (247, 194))
-        for index, color in enumerate(page.palette):
-            pygame.draw.circle(self.screen, color, (249 + (index % 8)*21, 222 + (index // 8)*15), 7)
+        panel_x, content_x = 231, 265
+        pygame.draw.line(self.screen, (87, 95, 125), (panel_x, 0), (panel_x, HEIGHT))
+        self._thumbnail(page, pygame.Rect(content_x, 28, 128, 128))
+        self._text(self.bold_font, page.title, (content_x, 166))
+        self._text(font, f"{page.color_count} colors", (content_x, 186))
+        # Reserve a stable 8x2 palette block.  Empty slots remain transparent,
+        # so pages with fewer colours keep the same centered composition.
+        for index in range(16):
+            if index < page.color_count:
+                pygame.draw.circle(self.screen, page.palette[index], (content_x + 7 + (index % 8)*15, 214 + (index // 8)*18), 7)
 
     def _drawing(self, font):
         page = self.page; max_x, max_y = (WIDTH-HUD_W)//CELL, HEIGHT//CELL
