@@ -86,6 +86,10 @@ class App:
                 dx, dy = {Action.LEFT:(-1,0), Action.RIGHT:(1,0), Action.UP:(0,-1), Action.DOWN:(0,1)}[action]
                 col, row = self.selected % GRID_COLUMNS, self.selected // GRID_COLUMNS
                 proposed = (row + dy) * GRID_COLUMNS + col + dx
+                # A partial last row still accepts Down from a missing column:
+                # land on its final available item.  Up stays a plain column move.
+                if action is Action.DOWN and proposed >= len(PAGES) and (row + 1) * GRID_COLUMNS < len(PAGES):
+                    proposed = len(PAGES) - 1
                 if 0 <= col + dx < GRID_COLUMNS and 0 <= proposed < len(PAGES):
                     self.selected = proposed
                     self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(PAGES) - 1) // GRID_COLUMNS - 1)))
