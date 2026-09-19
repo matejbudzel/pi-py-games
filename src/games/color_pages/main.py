@@ -31,6 +31,7 @@ class App:
         self.cursor = [0, 0]
         self.colored: set[tuple[int, int]] = set()
         self.current_color, self.steps, self.started = 0, 0, 0.0
+        self.finished_at: float | None = None
         self.camera = [0, 0]
         self.running = True
 
@@ -40,6 +41,7 @@ class App:
     def begin(self) -> None:
         self.screen_name, self.cursor, self.colored = "drawing", [0, 0], set()
         self.current_color, self.steps, self.started, self.camera = 0, 0, time.monotonic(), [0, 0]
+        self.finished_at = None
         self._advance_color()
 
     def _advance_color(self) -> None:
@@ -49,6 +51,7 @@ class App:
         ):
             self.current_color += 1
         if self.current_color == self.page.color_count:
+            self.finished_at = time.monotonic()
             self.screen_name = "result"
 
     def move(self, action: Action) -> None:
@@ -97,7 +100,9 @@ class App:
                     self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(PAGES) - 1) // GRID_COLUMNS - 1)))
         elif self.screen_name == "drawing":
             if action is Action.SELECT: self.modal = "no"
-            elif action is Action.DEBUG_JUMP_END: self.screen_name = "result"
+            elif action is Action.DEBUG_JUMP_END:
+                self.finished_at = time.monotonic()
+                self.screen_name = "result"
             elif action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN): self.move(action)
         elif self.screen_name == "result" and action in (Action.START, Action.SELECT): self.screen_name = "selection"
 
@@ -181,7 +186,8 @@ class App:
         for y,row in enumerate(page.pixels):
             for x,value in enumerate(row):
                 if value >= 0: pygame.draw.rect(self.screen, page.palette[value], (ox+x*scale, oy+y*scale, scale, scale))
-        self._text(font, f"{int(time.monotonic()-self.started)}s", (285, 90)); self._text(font, f"{self.steps}", (285, 125))
+        elapsed = (self.finished_at if self.finished_at is not None else time.monotonic()) - self.started
+        self._text(font, f"{int(elapsed)}s", (285, 90)); self._text(font, f"{self.steps}", (285, 125))
         pygame.draw.circle(self.screen, (255,220,70), (267,86), 6); pygame.draw.polygon(self.screen, WHITE, [(262,118),(267,113),(272,118),(267,123)])
 
     def _modal(self, font, small):
