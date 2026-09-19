@@ -97,6 +97,7 @@ class App:
                     self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(PAGES) - 1) // GRID_COLUMNS - 1)))
         elif self.screen_name == "drawing":
             if action is Action.SELECT: self.modal = "no"
+            elif action is Action.DEBUG_JUMP_END: self.screen_name = "result"
             elif action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN): self.move(action)
         elif self.screen_name == "result" and action in (Action.START, Action.SELECT): self.screen_name = "selection"
 
