@@ -12,9 +12,12 @@ from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
 from .pages import PAGES, Page
 
-WIDTH, HEIGHT, FPS = 854, 480, 30
+# The art and UI live on the deliberately chunky logical canvas.  GameDisplay
+# presents this exact surface at 854x480 using a 2x nearest-neighbour scale.
+WIDTH, HEIGHT, FPS = 427, 240, 30
+OUTPUT_SIZE = (854, 480)
 BG, INK, WHITE, GREY = (31, 35, 55), (12, 15, 25), (247, 245, 235), (126, 132, 146)
-CELL, HUD_W = 5, 96
+CELL, HUD_W = 5, 48
 
 
 class App:
@@ -101,24 +104,24 @@ class App:
         image = font.render(text, False, color); self.screen.blit(image, image.get_rect(center=pos) if center else pos)
 
     def _thumbnail(self, page, rect):
-        scale = 64 / page.size
+        scale = rect.width / page.size
         pygame.draw.rect(self.screen, INK, rect)
         for y, row in enumerate(page.pixels):
             for x, value in enumerate(row):
                 if value >= 0: pygame.draw.rect(self.screen, page.palette[value], (rect.x+x*scale, rect.y+y*scale, max(1, scale), max(1, scale)))
 
     def _selection(self, font, small):
-        self._text(font, "PIXEL COLORS", (30, 20))
+        self._text(font, "PIXEL COLORS", (15, 10))
         for index, page in enumerate(PAGES):
             row = index // 4
             if not self.selection_scroll <= row < self.selection_scroll + 2: continue
-            x, y = 72 + (index % 4)*156, 78 + (row-self.selection_scroll)*156
-            rect = pygame.Rect(x, y, 64, 64); self._thumbnail(page, rect)
-            if index == self.selected: pygame.draw.rect(self.screen, (255, 219, 84), rect.inflate(8, 8), 3)
+            x, y = 36 + (index % 4)*78, 39 + (row-self.selection_scroll)*78
+            rect = pygame.Rect(x, y, 32, 32); self._thumbnail(page, rect)
+            if index == self.selected: pygame.draw.rect(self.screen, (255, 219, 84), rect.inflate(4, 4), 2)
         page = self.page; col = self.selected % 4
-        x = 682 if col < 3 else 8
-        pygame.draw.rect(self.screen, (57, 64, 91), (x, 248, 156, 92))
-        self._text(small, page.title, (x+10, 260)); self._text(small, f"{page.size} x {page.size}", (x+10, 284)); self._text(small, f"{page.color_count} colors", (x+10, 308))
+        x = 341 if col < 3 else 4
+        pygame.draw.rect(self.screen, (57, 64, 91), (x, 124, 78, 46))
+        self._text(small, page.title, (x+5, 130)); self._text(small, f"{page.size} x {page.size}", (x+5, 142)); self._text(small, f"{page.color_count} colors", (x+5, 154))
 
     def _drawing(self, font):
         page = self.page; max_x, max_y = (WIDTH-HUD_W)//CELL, HEIGHT//CELL
@@ -130,31 +133,31 @@ class App:
                 if value == self.current_color and (x,y) not in self.colored: pygame.draw.circle(self.screen, WHITE, rect.center, 1)
         sx, sy = (self.cursor[0]-self.camera[0])*CELL, (self.cursor[1]-self.camera[1])*CELL
         pygame.draw.rect(self.screen, WHITE, (sx, sy, CELL, CELL), 1)
-        x = WIDTH-HUD_W+12; pygame.draw.rect(self.screen, (45, 51, 75), (WIDTH-HUD_W, 0, HUD_W, HEIGHT))
+        x = WIDTH-HUD_W+6; pygame.draw.rect(self.screen, (45, 51, 75), (WIDTH-HUD_W, 0, HUD_W, HEIGHT))
         total = sum(value >= 0 for row in page.pixels for value in row); pct = round(100*len(self.colored)/total) if total else 100
         for i, label in enumerate((f"{pct}%", f"{self.current_color+1}/{page.color_count}", f"{self.steps}", f"{int(time.monotonic()-self.started)}s")):
-            self._text(font, label, (x, 18+i*34))
-        if self.current_color < page.color_count: pygame.draw.circle(self.screen, page.palette[self.current_color], (WIDTH-HUD_W//2, 164), 14)
-        for i, color in enumerate(page.palette): pygame.draw.circle(self.screen, color, (x+14+(i%2)*34, 208+(i//2)*30), 10)
+            self._text(font, label, (x, 9+i*17))
+        if self.current_color < page.color_count: pygame.draw.circle(self.screen, page.palette[self.current_color], (WIDTH-HUD_W//2, 82), 7)
+        for i, color in enumerate(page.palette): pygame.draw.circle(self.screen, color, (x+7+(i%2)*17, 104+(i//2)*15), 5)
 
     def _result(self, font, small):
-        page = self.page; scale = min(320/page.size, 360/page.size); ox, oy = 180, (HEIGHT-page.size*scale)/2
+        page = self.page; scale = min(160/page.size, 180/page.size); ox, oy = 90, (HEIGHT-page.size*scale)/2
         for y,row in enumerate(page.pixels):
             for x,value in enumerate(row):
                 if value >= 0: pygame.draw.rect(self.screen, page.palette[value], (ox+x*scale, oy+y*scale, scale, scale))
-        self._text(font, f"{int(time.monotonic()-self.started)}s", (570, 180)); self._text(font, f"{self.steps}", (570, 250))
-        pygame.draw.circle(self.screen, (255,220,70), (535,172), 12); pygame.draw.polygon(self.screen, WHITE, [(523,235),(533,225),(543,235),(533,245)])
+        self._text(font, f"{int(time.monotonic()-self.started)}s", (285, 90)); self._text(font, f"{self.steps}", (285, 125))
+        pygame.draw.circle(self.screen, (255,220,70), (267,86), 6); pygame.draw.polygon(self.screen, WHITE, [(262,118),(267,113),(272,118),(267,123)])
 
     def _modal(self, font, small):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); overlay.fill((0,0,0,175)); self.screen.blit(overlay,(0,0))
-        rect=pygame.Rect(250,170,354,140); pygame.draw.rect(self.screen,(57,64,91),rect); pygame.draw.rect(self.screen,WHITE,rect,2)
-        self._text(font, "LEAVE?", (WIDTH//2,195), center=True)
-        self._text(small, "YES", (340,260), (255,219,84) if self.modal=="yes" else WHITE); self._text(small,"NO",(470,260),(255,219,84) if self.modal=="no" else WHITE)
+        rect=pygame.Rect(125,85,177,70); pygame.draw.rect(self.screen,(57,64,91),rect); pygame.draw.rect(self.screen,WHITE,rect,1)
+        self._text(font, "LEAVE?", (WIDTH//2,98), center=True)
+        self._text(small, "YES", (170,130), (255,219,84) if self.modal=="yes" else WHITE); self._text(small,"NO",(235,130),(255,219,84) if self.modal=="no" else WHITE)
 
     def run(self) -> None:
         settings=display_settings(); initialize_pygame(settings)
-        display=GameDisplay(settings,(WIDTH,HEIGHT)); self.screen=display.canvas
-        font=pygame.font.Font(SWEET16_FONT_PATH, 24); small=pygame.font.Font(SWEET16_FONT_PATH, 16)
+        display=GameDisplay(settings, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT)); self.screen=display.canvas
+        font=pygame.font.Font(SWEET16_FONT_PATH, 12); small=pygame.font.Font(SWEET16_FONT_PATH, 8)
         joystick=JoystickInput() if settings.backend=="pygame" else None; console=ConsoleInput() if settings.backend=="fbdev" else None; clock=pygame.time.Clock()
         try:
             with console or _NullContext():
