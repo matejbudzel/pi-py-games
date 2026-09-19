@@ -15,6 +15,7 @@ GAMES = (
     ("shadow-run", "Shadow Run", "games.shadow_run.main", "PI_SHADOW_RUN_CONFIG", "config/shadow-run.ini"),
     ("winter-sports", "Winter Sports", "games.winter_sports.main", "PI_WINTER_SPORTS_CONFIG", "config/winter-sports.ini"),
     ("fb-grid-test", "Test LED framebufferu", "games.fb_grid_test.main", "PI_FB_GRID_TEST_CONFIG", "fb-grid-test.ini"),
+    ("pixel-colors", "Pixel Colors", "games.color_pages.main", "PI_PIXEL_COLORS_CONFIG", "pixel-colors.ini"),
 )
 
 

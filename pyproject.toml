@@ -22,6 +22,7 @@ pi-2048 = "games.twenty48.main:main"
 pi-shadow-run = "games.shadow_run.main:main"
 pi-winter-sports = "games.winter_sports.main:main"
 pi-fb-grid-test = "games.fb_grid_test.main:main"
+pi-pixel-colors = "games.color_pages.main:main"
 prepare-shadow-songs = "games.shadow_run.prepare_songs:main"
 pi-py-games = "pi_py_games.provider:main"
 
