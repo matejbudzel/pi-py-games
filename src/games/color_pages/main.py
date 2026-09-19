@@ -154,16 +154,19 @@ class App:
 
     def _drawing(self, font):
         page = self.page; max_x, max_y = (WIDTH-HUD_W)//CELL, HEIGHT//CELL
+        canvas_x = ((WIDTH - HUD_W) - max_x * CELL) // 2
+        canvas_y = (HEIGHT - max_y * CELL) // 2
         for sy in range(min(max_y, page.size-self.camera[1])):
             for sx in range(min(max_x, page.size-self.camera[0])):
                 x, y = sx+self.camera[0], sy+self.camera[1]; value = page.pixels[y][x]
                 color = INK if value < 0 else (page.palette[value] if (x,y) in self.colored else GREY)
-                rect = pygame.Rect(sx*CELL, sy*CELL, CELL, CELL)
+                rect = pygame.Rect(canvas_x + sx*CELL, canvas_y + sy*CELL, CELL, CELL)
                 pygame.draw.rect(self.screen, INK, rect)
                 if value >= 0:
                     pygame.draw.rect(self.screen, color, rect.inflate(-2, -2))
                 if value == self.current_color and (x,y) not in self.colored: pygame.draw.circle(self.screen, WHITE, rect.center, 3)
-        sx, sy = (self.cursor[0]-self.camera[0])*CELL, (self.cursor[1]-self.camera[1])*CELL
+        sx = canvas_x + (self.cursor[0]-self.camera[0])*CELL
+        sy = canvas_y + (self.cursor[1]-self.camera[1])*CELL
         pygame.draw.rect(self.screen, WHITE, (sx, sy, CELL, CELL), 1)
         x = WIDTH-HUD_W+6; pygame.draw.rect(self.screen, (45, 51, 75), (WIDTH-HUD_W, 0, HUD_W, HEIGHT))
         total = sum(value >= 0 for row in page.pixels for value in row); pct = round(100*len(self.colored)/total) if total else 100
