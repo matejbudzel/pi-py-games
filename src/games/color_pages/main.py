@@ -128,7 +128,7 @@ class App:
         pygame.draw.line(self.screen, (87, 95, 125), (panel_x, 0), (panel_x, HEIGHT))
         self._thumbnail(page, pygame.Rect(content_x, 10, 144, 144))
         self._text(self.bold_font, page.title, (content_x, 166))
-        self._text(font, f"{page.color_count} colors", (content_x, 186))
+        self._text(font, f"{page.size}x{page.size}  {page.color_count} colors", (content_x, 186))
         # Reserve a stable 8x2 palette block.  Empty slots remain transparent,
         # so pages with fewer colours keep the same centered composition.
         for index in range(16):
