@@ -109,11 +109,22 @@ class App:
         self.screen.blit(self.rainbow_title, self.rainbow_title.get_rect(center=pos) if center else pos)
 
     def _thumbnail(self, page, rect):
-        scale = rect.width / page.size
-        pygame.draw.rect(self.screen, INK, rect)
+        key = (page, rect.size)
+        image = self.scaled_pages.get(key)
+        if image is None:
+            image = pygame.transform.scale(self.page_surfaces[page], rect.size)
+            self.scaled_pages[key] = image
+        self.screen.blit(image, rect)
+
+    def _page_surface(self, page: Page) -> pygame.Surface:
+        """Build one native-resolution page; scaling the whole image avoids seams."""
+        surface = pygame.Surface((page.size, page.size))
+        surface.fill(INK)
         for y, row in enumerate(page.pixels):
             for x, value in enumerate(row):
-                if value >= 0: pygame.draw.rect(self.screen, page.palette[value], (rect.x+x*scale, rect.y+y*scale, max(1, scale), max(1, scale)))
+                if value >= 0:
+                    surface.set_at((x, y), page.palette[value])
+        return surface
 
     def _selection(self, font, small):
         self._rainbow_title((8, 8))
@@ -178,6 +189,8 @@ class App:
         x = 0
         for glyph in glyphs:
             self.rainbow_title.blit(glyph, (x, 0)); x += glyph.get_width()
+        self.page_surfaces = {page: self._page_surface(page) for page in PAGES}
+        self.scaled_pages: dict[tuple[Page, tuple[int, int]], pygame.Surface] = {}
         joystick=JoystickInput() if settings.backend=="pygame" else None; console=ConsoleInput() if settings.backend=="fbdev" else None; clock=pygame.time.Clock()
         try:
             with console or _NullContext():
