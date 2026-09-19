@@ -17,7 +17,9 @@ from .pages import PAGES, Page
 WIDTH, HEIGHT, FPS = 427, 240, 30
 OUTPUT_SIZE = (854, 480)
 BG, INK, WHITE, GREY = (31, 35, 55), (12, 15, 25), (247, 245, 235), (126, 132, 146)
-CELL, HUD_W = 5, 48
+# 16 cells at this pitch occupy 352 of the 363px drawing viewport.  The
+# remaining space avoids clipping while each logical image pixel stays large.
+CELL, HUD_W = 22, 64
 GRID_COLUMNS = 3
 RAINBOW = ((255, 105, 112), (255, 181, 72), (255, 232, 92), (104, 221, 133), (94, 184, 255), (183, 126, 255))
 
@@ -156,8 +158,11 @@ class App:
             for sx in range(min(max_x, page.size-self.camera[0])):
                 x, y = sx+self.camera[0], sy+self.camera[1]; value = page.pixels[y][x]
                 color = INK if value < 0 else (page.palette[value] if (x,y) in self.colored else GREY)
-                rect = pygame.Rect(sx*CELL, sy*CELL, CELL, CELL); pygame.draw.rect(self.screen, color, rect)
-                if value == self.current_color and (x,y) not in self.colored: pygame.draw.circle(self.screen, WHITE, rect.center, 1)
+                rect = pygame.Rect(sx*CELL, sy*CELL, CELL, CELL)
+                pygame.draw.rect(self.screen, INK, rect)
+                if value >= 0:
+                    pygame.draw.rect(self.screen, color, rect.inflate(-2, -2))
+                if value == self.current_color and (x,y) not in self.colored: pygame.draw.circle(self.screen, WHITE, rect.center, 3)
         sx, sy = (self.cursor[0]-self.camera[0])*CELL, (self.cursor[1]-self.camera[1])*CELL
         pygame.draw.rect(self.screen, WHITE, (sx, sy, CELL, CELL), 1)
         x = WIDTH-HUD_W+6; pygame.draw.rect(self.screen, (45, 51, 75), (WIDTH-HUD_W, 0, HUD_W, HEIGHT))
