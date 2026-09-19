@@ -157,7 +157,9 @@ class App:
     def run(self) -> None:
         settings=display_settings(); initialize_pygame(settings)
         display=GameDisplay(settings, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT)); self.screen=display.canvas
-        font=pygame.font.Font(SWEET16_FONT_PATH, 12); small=pygame.font.Font(SWEET16_FONT_PATH, 8)
+        # The logical canvas is doubled on output, so an 8px Sweet16 font
+        # presents as the requested 16px everywhere in the game.
+        font=pygame.font.Font(SWEET16_FONT_PATH, 8); small=pygame.font.Font(SWEET16_FONT_PATH, 8)
         joystick=JoystickInput() if settings.backend=="pygame" else None; console=ConsoleInput() if settings.backend=="fbdev" else None; clock=pygame.time.Clock()
         try:
             with console or _NullContext():
