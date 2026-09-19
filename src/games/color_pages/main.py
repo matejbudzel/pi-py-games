@@ -18,6 +18,8 @@ WIDTH, HEIGHT, FPS = 427, 240, 30
 OUTPUT_SIZE = (854, 480)
 BG, INK, WHITE, GREY = (31, 35, 55), (12, 15, 25), (247, 245, 235), (126, 132, 146)
 CELL, HUD_W = 5, 48
+GRID_COLUMNS = 3
+RAINBOW = ((255, 105, 112), (255, 181, 72), (255, 232, 92), (104, 221, 133), (94, 184, 255), (183, 126, 255))
 
 
 class App:
@@ -82,11 +84,11 @@ class App:
             elif action is Action.START: self.begin()
             elif action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN):
                 dx, dy = {Action.LEFT:(-1,0), Action.RIGHT:(1,0), Action.UP:(0,-1), Action.DOWN:(0,1)}[action]
-                col, row = self.selected % 4, self.selected // 4
-                proposed = (row + dy) * 4 + col + dx
-                if 0 <= col + dx < 4 and 0 <= proposed < len(PAGES):
+                col, row = self.selected % GRID_COLUMNS, self.selected // GRID_COLUMNS
+                proposed = (row + dy) * GRID_COLUMNS + col + dx
+                if 0 <= col + dx < GRID_COLUMNS and 0 <= proposed < len(PAGES):
                     self.selected = proposed
-                    self.selection_scroll = max(0, min(self.selected // 4 - 1, max(0, (len(PAGES) - 1) // 4 - 1)))
+                    self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(PAGES) - 1) // GRID_COLUMNS - 1)))
         elif self.screen_name == "drawing":
             if action is Action.SELECT: self.modal = "no"
             elif action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN): self.move(action)
@@ -94,7 +96,7 @@ class App:
 
     def draw(self, font: pygame.font.Font, small: pygame.font.Font) -> None:
         self.screen.fill(BG)
-        if self.screen_name == "splash": self._text(font, "PIXEL COLORS", (WIDTH//2, HEIGHT//2), center=True)
+        if self.screen_name == "splash": self._rainbow_title((WIDTH//2, HEIGHT//2), center=True)
         elif self.screen_name == "selection": self._selection(font, small)
         elif self.screen_name == "drawing": self._drawing(small)
         else: self._result(font, small)
@@ -102,6 +104,9 @@ class App:
 
     def _text(self, font, text, pos, color=WHITE, center=False):
         image = font.render(text, False, color); self.screen.blit(image, image.get_rect(center=pos) if center else pos)
+
+    def _rainbow_title(self, pos, center=False):
+        self.screen.blit(self.rainbow_title, self.rainbow_title.get_rect(center=pos) if center else pos)
 
     def _thumbnail(self, page, rect):
         scale = rect.width / page.size
@@ -111,17 +116,22 @@ class App:
                 if value >= 0: pygame.draw.rect(self.screen, page.palette[value], (rect.x+x*scale, rect.y+y*scale, max(1, scale), max(1, scale)))
 
     def _selection(self, font, small):
-        self._text(font, "PIXEL COLORS", (15, 10))
+        self._rainbow_title((8, 8))
         for index, page in enumerate(PAGES):
-            row = index // 4
+            row = index // GRID_COLUMNS
             if not self.selection_scroll <= row < self.selection_scroll + 2: continue
-            x, y = 36 + (index % 4)*78, 39 + (row-self.selection_scroll)*78
-            rect = pygame.Rect(x, y, 32, 32); self._thumbnail(page, rect)
+            x, y = 8 + (index % GRID_COLUMNS)*74, 42 + (row-self.selection_scroll)*88
+            rect = pygame.Rect(x, y, 64, 64); self._thumbnail(page, rect)
             if index == self.selected: pygame.draw.rect(self.screen, (255, 219, 84), rect.inflate(4, 4), 2)
-        page = self.page; col = self.selected % 4
-        x = 341 if col < 3 else 4
-        pygame.draw.rect(self.screen, (57, 64, 91), (x, 124, 78, 46))
-        self._text(small, page.title, (x+5, 130)); self._text(small, f"{page.size} x {page.size}", (x+5, 142)); self._text(small, f"{page.color_count} colors", (x+5, 154))
+        page = self.page
+        panel = pygame.Rect(231, 0, 196, HEIGHT)
+        pygame.draw.rect(self.screen, (45, 51, 75), panel)
+        pygame.draw.rect(self.screen, (87, 95, 125), panel, 1)
+        self._thumbnail(page, pygame.Rect(265, 32, 128, 128))
+        self._text(self.bold_font, page.title, (247, 172))
+        self._text(font, f"{page.color_count} colors", (247, 194))
+        for index, color in enumerate(page.palette):
+            pygame.draw.circle(self.screen, color, (249 + (index % 8)*21, 222 + (index // 8)*15), 7)
 
     def _drawing(self, font):
         page = self.page; max_x, max_y = (WIDTH-HUD_W)//CELL, HEIGHT//CELL
@@ -160,6 +170,12 @@ class App:
         # All layout dimensions, including the 16px Sweet16 type, are defined
         # on the 427x240 logical canvas.  Presentation scaling is separate.
         font=pygame.font.Font(SWEET16_FONT_PATH, 16); small=pygame.font.Font(SWEET16_FONT_PATH, 16)
+        self.bold_font=pygame.font.Font(SWEET16_FONT_PATH, 16); self.bold_font.set_bold(True)
+        glyphs = [self.bold_font.render(letter, False, RAINBOW[index % len(RAINBOW)]) for index, letter in enumerate("PIXEL COLORS")]
+        self.rainbow_title = pygame.Surface((sum(glyph.get_width() for glyph in glyphs), self.bold_font.get_height()), pygame.SRCALPHA)
+        x = 0
+        for glyph in glyphs:
+            self.rainbow_title.blit(glyph, (x, 0)); x += glyph.get_width()
         joystick=JoystickInput() if settings.backend=="pygame" else None; console=ConsoleInput() if settings.backend=="fbdev" else None; clock=pygame.time.Clock()
         try:
             with console or _NullContext():
