@@ -125,7 +125,7 @@ class App:
             if index == self.selected: pygame.draw.rect(self.screen, (255, 219, 84), rect.inflate(4, 4), 2)
         page = self.page
         panel_x, content_x = 231, 257
-        pygame.draw.line(self.screen, (87, 95, 125), (panel_x, 0), (panel_x, HEIGHT))
+        pygame.draw.rect(self.screen, (25, 28, 45), (panel_x, 0, WIDTH - panel_x, HEIGHT))
         self._thumbnail(page, pygame.Rect(content_x, 10, 144, 144))
         self._text(self.bold_font, page.title, (content_x, 166))
         self._text(font, f"{page.size}x{page.size}  {page.color_count} colors", (content_x, 186))
