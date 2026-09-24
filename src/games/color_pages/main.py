@@ -12,7 +12,7 @@ from common.error_logging import configure_logging
 from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
 from .config import Settings, load_settings
-from .pages import PAGES, Page
+from .art import Page, load_pages
 
 # The art and UI live on the deliberately chunky logical canvas.  GameDisplay
 # presents this exact surface at 854x480 using a 2x nearest-neighbour scale.
@@ -30,6 +30,7 @@ class App:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or load_settings()
         self.screen_name, self.selected, self.modal = "splash", 0, None
+        self.pages: tuple[Page, ...] = ()
         self.selection_scroll = 0
         self.cursor = [0, 0]
         self.colored: set[tuple[int, int]] = set()
@@ -39,13 +40,26 @@ class App:
         self.running = True
 
     @property
-    def page(self) -> Page: return PAGES[self.selected]
+    def page(self) -> Page: return self.pages[self.selected]
 
     def begin(self) -> None:
         self.screen_name, self.cursor, self.colored = "drawing", [0, 0], set()
         self.current_color, self.steps, self.started, self.camera = 0, 0, time.monotonic(), [0, 0]
         self.finished_at = None
         self._advance_color()
+
+    def reload_pages(self) -> None:
+        """Refresh external art while retaining the same file focus when possible."""
+        focused = self.page.source if self.pages else None
+        self.pages = load_pages(self.settings.art_directory)
+        self.selected = next((index for index, page in enumerate(self.pages) if page.source == focused), min(self.selected, max(0, len(self.pages) - 1)))
+        self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(self.pages) - 1) // GRID_COLUMNS - 1))) if self.pages else 0
+        self.page_surfaces = {page: self._page_surface(page) for page in self.pages}
+        self.scaled_pages = {}
+
+    def return_to_selection(self) -> None:
+        self.reload_pages()
+        self.screen_name = "selection"
 
     def _advance_color(self) -> None:
         while self.current_color < self.page.color_count and not any(
@@ -81,7 +95,9 @@ class App:
             if action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN): self.modal = "yes" if self.modal == "no" else "no"
             elif action is Action.SELECT: self.modal = None
             elif action is Action.START:
-                if self.modal == "yes": self.running = False if self.screen_name == "selection" else True; self.screen_name = "selection" if self.screen_name == "drawing" else self.screen_name
+                if self.modal == "yes":
+                    if self.screen_name == "selection": self.running = False
+                    elif self.screen_name == "drawing": self.return_to_selection()
                 self.modal = None
             return
         if self.screen_name == "splash":
@@ -89,25 +105,25 @@ class App:
             elif action is Action.SELECT: self.running = False
         elif self.screen_name == "selection":
             if action is Action.SELECT: self.modal = "no"
-            elif action is Action.START: self.begin()
+            elif action is Action.START and self.pages: self.begin()
             elif action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN):
                 dx, dy = {Action.LEFT:(-1,0), Action.RIGHT:(1,0), Action.UP:(0,-1), Action.DOWN:(0,1)}[action]
                 col, row = self.selected % GRID_COLUMNS, self.selected // GRID_COLUMNS
                 proposed = (row + dy) * GRID_COLUMNS + col + dx
                 # A partial last row still accepts Down from a missing column:
                 # land on its final available item.  Up stays a plain column move.
-                if action is Action.DOWN and proposed >= len(PAGES) and (row + 1) * GRID_COLUMNS < len(PAGES):
-                    proposed = len(PAGES) - 1
-                if 0 <= col + dx < GRID_COLUMNS and 0 <= proposed < len(PAGES):
+                if action is Action.DOWN and proposed >= len(self.pages) and (row + 1) * GRID_COLUMNS < len(self.pages):
+                    proposed = len(self.pages) - 1
+                if 0 <= col + dx < GRID_COLUMNS and 0 <= proposed < len(self.pages):
                     self.selected = proposed
-                    self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(PAGES) - 1) // GRID_COLUMNS - 1)))
+                    self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(self.pages) - 1) // GRID_COLUMNS - 1)))
         elif self.screen_name == "drawing":
             if action is Action.SELECT: self.modal = "no"
             elif action is Action.DEBUG_JUMP_END:
                 self.finished_at = time.monotonic()
                 self.screen_name = "result"
             elif action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN): self.move(action)
-        elif self.screen_name == "result" and action in (Action.START, Action.SELECT): self.screen_name = "selection"
+        elif self.screen_name == "result" and action in (Action.START, Action.SELECT): self.return_to_selection()
 
     def draw(self, font: pygame.font.Font, small: pygame.font.Font) -> None:
         background = {"splash": "intro", "selection": "selection", "drawing": "drawing", "result": "result"}[self.screen_name]
@@ -144,7 +160,10 @@ class App:
 
     def _selection(self, font, small):
         self._rainbow_title((8, 8))
-        for index, page in enumerate(PAGES):
+        if not self.pages:
+            self._text(font, self.settings.no_images_text, (WIDTH // 2, HEIGHT // 2), center=True)
+            return
+        for index, page in enumerate(self.pages):
             row = index // GRID_COLUMNS
             if not self.selection_scroll <= row < self.selection_scroll + 2: continue
             x, y = 8 + (index % GRID_COLUMNS)*74, 42 + (row-self.selection_scroll)*88
@@ -259,8 +278,8 @@ class App:
         self.backgrounds = {name: pygame.image.load(asset_directory / "backgrounds" / f"{name}.png").convert() for name in ("intro", "selection", "drawing", "result")}
         self.hud_icons = {name: pygame.transform.scale(image, (24, 24)) for name, image in self.icons.items()}
         self.hud_percent_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
-        self.page_surfaces = {page: self._page_surface(page) for page in PAGES}
         self.scaled_pages: dict[tuple[Page, tuple[int, int]], pygame.Surface] = {}
+        self.reload_pages()
         joystick=JoystickInput() if settings.backend=="pygame" else None; console=ConsoleInput() if settings.backend=="fbdev" else None; clock=pygame.time.Clock()
         try:
             with console or _NullContext():
