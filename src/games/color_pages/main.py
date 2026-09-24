@@ -206,9 +206,9 @@ class App:
         image_size, gap = 160, 24
         block_width = image_size + gap + values_width
         left = (WIDTH - block_width) // 2
-        content_backdrop = pygame.Surface((300, 160), pygame.SRCALPHA)
-        content_backdrop.fill((8, 12, 30, 185))
-        self.screen.blit(content_backdrop, ((WIDTH - 300) // 2, (HEIGHT - 160) // 2))
+        result_shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        result_shade.fill((8, 12, 30, 185))
+        self.screen.blit(result_shade, (0, 0))
         image_key = (page, (image_size, image_size))
         image = self.scaled_pages.get(image_key)
         if image is None:
@@ -216,9 +216,6 @@ class App:
             self.scaled_pages[image_key] = image
         image_position = (left, (HEIGHT - image_size) // 2)
         self.screen.blit(image, image_position)
-        image_tint = pygame.Surface((image_size, image_size), pygame.SRCALPHA)
-        image_tint.fill((8, 12, 30, 45))
-        self.screen.blit(image_tint, image_position)
         values_y = (HEIGHT - len(value_images) * 48) // 2
         values_x = left + image_size + gap
         for index, (icon, text) in enumerate(value_images):
