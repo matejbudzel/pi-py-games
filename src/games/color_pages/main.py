@@ -108,7 +108,8 @@ class App:
         elif self.screen_name == "result" and action in (Action.START, Action.SELECT): self.screen_name = "selection"
 
     def draw(self, font: pygame.font.Font, small: pygame.font.Font) -> None:
-        self.screen.fill(BG)
+        background = {"splash": "intro", "selection": "selection", "drawing": "drawing", "result": "result"}[self.screen_name]
+        self.screen.blit(self.backgrounds[background], (0, 0))
         if self.screen_name == "splash": self._rainbow_title((WIDTH//2, HEIGHT//2), center=True)
         elif self.screen_name == "selection": self._selection(font, small)
         elif self.screen_name == "drawing": self._drawing(small)
@@ -148,8 +149,7 @@ class App:
             rect = pygame.Rect(x, y, 64, 64); self._thumbnail(page, rect)
             if index == self.selected: pygame.draw.rect(self.screen, (255, 219, 84), rect.inflate(4, 4), 2)
         page = self.page
-        panel_x, content_x = 231, 257
-        pygame.draw.rect(self.screen, (25, 28, 45), (panel_x, 0, WIDTH - panel_x, HEIGHT))
+        content_x = 257
         self._thumbnail(page, pygame.Rect(content_x, 10, 144, 144))
         self._text(self.bold_font, page.title, (content_x, 166))
         self._text(font, f"{page.size}x{page.size}  {page.color_count} colors", (content_x, 186))
@@ -175,7 +175,7 @@ class App:
         sx = canvas_x + (self.cursor[0]-self.camera[0])*CELL
         sy = canvas_y + (self.cursor[1]-self.camera[1])*CELL
         pygame.draw.rect(self.screen, WHITE, (sx, sy, CELL, CELL), 1)
-        hud_x = WIDTH-HUD_W; pygame.draw.rect(self.screen, (45, 51, 75), (hud_x, 0, HUD_W, HEIGHT))
+        hud_x = WIDTH-HUD_W
         total = sum(value >= 0 for row in page.pixels for value in row); pct = round(100*len(self.colored)/total) if total else 100
         percent = self.hud_percent_font.render(f"{pct}%", False, WHITE)
         self.screen.blit(percent, percent.get_rect(center=(hud_x + HUD_W // 2, 20)))
@@ -247,6 +247,7 @@ class App:
             self.rainbow_title.blit(glyph, (x, 0)); x += glyph.get_width()
         asset_directory = Path(__file__).with_name("assets")
         self.icons = {name: pygame.image.load(asset_directory / f"{name}.png").convert_alpha() for name in ("feet", "palette", "time")}
+        self.backgrounds = {name: pygame.image.load(asset_directory / "backgrounds" / f"{name}.png").convert() for name in ("intro", "selection", "drawing", "result")}
         self.hud_icons = {name: pygame.transform.scale(image, (24, 24)) for name, image in self.icons.items()}
         self.hud_percent_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
         self.page_surfaces = {page: self._page_surface(page) for page in PAGES}
