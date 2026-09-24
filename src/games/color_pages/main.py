@@ -183,13 +183,15 @@ class App:
         self.screen.blit(self.hud_icons["time"], (hud_x + 2, 44)); self._text(font, f"{elapsed}s", (hud_x + 30, 48))
         self.screen.blit(self.hud_icons["feet"], (hud_x + 2, 72)); self._text(font, str(self.steps), (hud_x + 30, 76))
         upcoming = page.palette[self.current_color + 1:]
-        palette_rows = (len(upcoming) + 1) // 2
-        palette_y = HEIGHT - 8 - 5 - max(0, palette_rows - 1) * 10
-        active_y = palette_y - 23 if upcoming else HEIGHT - 8 - 10
-        label_y = active_y - 34
+        # Keep the palette immediately after the step counter, independent of
+        # the number of remaining colours.  Empty lower slots simply stay open.
+        label_y, active_y, palette_y = 104, 138, 161
         used_colors = len({page.pixels[y][x] for x, y in self.colored})
         self.screen.blit(self.hud_icons["palette"], (hud_x + 2, label_y - 4))
         self._text(font, f"{used_colors}/{page.color_count}", (hud_x + 30, label_y))
+        palette_backdrop = pygame.Surface((HUD_W - 8, 116), pygame.SRCALPHA)
+        palette_backdrop.fill((8, 12, 30, 185))
+        self.screen.blit(palette_backdrop, (hud_x + 4, 124))
         if self.current_color < page.color_count:
             pygame.draw.circle(self.screen, page.palette[self.current_color], (hud_x + HUD_W // 2, active_y), 10)
         for index, color in enumerate(upcoming):
@@ -204,12 +206,19 @@ class App:
         image_size, gap = 160, 24
         block_width = image_size + gap + values_width
         left = (WIDTH - block_width) // 2
+        content_backdrop = pygame.Surface((300, 160), pygame.SRCALPHA)
+        content_backdrop.fill((8, 12, 30, 185))
+        self.screen.blit(content_backdrop, ((WIDTH - 300) // 2, (HEIGHT - 160) // 2))
         image_key = (page, (image_size, image_size))
         image = self.scaled_pages.get(image_key)
         if image is None:
             image = pygame.transform.scale(self.page_surfaces[page], image_key[1])
             self.scaled_pages[image_key] = image
-        self.screen.blit(image, (left, (HEIGHT - image_size) // 2))
+        image_position = (left, (HEIGHT - image_size) // 2)
+        self.screen.blit(image, image_position)
+        image_tint = pygame.Surface((image_size, image_size), pygame.SRCALPHA)
+        image_tint.fill((8, 12, 30, 45))
+        self.screen.blit(image_tint, image_position)
         values_y = (HEIGHT - len(value_images) * 48) // 2
         values_x = left + image_size + gap
         for index, (icon, text) in enumerate(value_images):
