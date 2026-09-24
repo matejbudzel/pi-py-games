@@ -16,7 +16,7 @@ class Settings:
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
-    path = config_path or Path(os.environ.get("PI_PIXEL_COLORS_CONFIG", "config/pixel-colors.ini")).expanduser()
+    path = config_path or Path(os.environ.get("PI_PIXEL_COLORS_CONFIG", "config/color_pages.ini")).expanduser()
     parser = ConfigParser()
     parser.read(path, encoding="utf-8")
     return Settings(
