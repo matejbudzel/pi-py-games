@@ -11,6 +11,7 @@ from common.display import GameDisplay, display_settings, initialize_pygame
 from common.error_logging import configure_logging
 from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
+from .config import Settings, load_settings
 from .pages import PAGES, Page
 
 # The art and UI live on the deliberately chunky logical canvas.  GameDisplay
@@ -26,7 +27,8 @@ RAINBOW = ((255, 105, 112), (255, 181, 72), (255, 232, 92), (104, 221, 133), (94
 
 
 class App:
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.settings = settings or load_settings()
         self.screen_name, self.selected, self.modal = "splash", 0, None
         self.selection_scroll = 0
         self.cursor = [0, 0]
@@ -226,9 +228,9 @@ class App:
     def _modal(self, font, small):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); overlay.fill((0,0,0,175)); self.screen.blit(overlay,(0,0))
         rect=pygame.Rect(125,85,177,70); pygame.draw.rect(self.screen,(57,64,91),rect); pygame.draw.rect(self.screen,WHITE,rect,1)
-        question = self.bold_font.render("LEAVE?", False, WHITE)
-        yes = small.render("YES", False, (255,219,84) if self.modal=="yes" else WHITE)
-        no = small.render("NO", False, (255,219,84) if self.modal=="no" else WHITE)
+        question = self.bold_font.render(self.settings.exit_confirmation_text, False, WHITE)
+        yes = small.render(self.settings.exit_confirm_button, False, (255,219,84) if self.modal=="yes" else WHITE)
+        no = small.render(self.settings.exit_cancel_button, False, (255,219,84) if self.modal=="no" else WHITE)
         gap = 16
         block_height = question.get_height() + 6 + max(yes.get_height(), no.get_height())
         top = rect.centery - block_height // 2
@@ -241,12 +243,13 @@ class App:
 
     def run(self) -> None:
         settings=display_settings(); initialize_pygame(settings)
+        if settings.backend == "pygame": pygame.display.set_caption(self.settings.title)
         display=GameDisplay(settings, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT)); self.screen=display.canvas
         # All layout dimensions, including the 16px Sweet16 type, are defined
         # on the 427x240 logical canvas.  Presentation scaling is separate.
         font=pygame.font.Font(SWEET16_FONT_PATH, 16); small=pygame.font.Font(SWEET16_FONT_PATH, 16)
         self.bold_font=pygame.font.Font(SWEET16_FONT_PATH, 16); self.bold_font.set_bold(True)
-        glyphs = [self.bold_font.render(letter, False, RAINBOW[index % len(RAINBOW)]) for index, letter in enumerate("PIXEL COLORS")]
+        glyphs = [self.bold_font.render(letter, False, RAINBOW[index % len(RAINBOW)]) for index, letter in enumerate(self.settings.title)]
         self.rainbow_title = pygame.Surface((sum(glyph.get_width() for glyph in glyphs), self.bold_font.get_height()), pygame.SRCALPHA)
         x = 0
         for glyph in glyphs:
@@ -281,7 +284,7 @@ class _NullContext:
 
 
 def main() -> None:
-    configure_logging(); App().run()
+    configure_logging(); App(load_settings()).run()
 
 
 if __name__ == "__main__": main()
