@@ -13,6 +13,7 @@ from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
 from .config import Settings, load_settings
 from .art import Page, load_pages
+from .progress import ProgressStore
 
 # The art and UI live on the deliberately chunky logical canvas.  GameDisplay
 # presents this exact surface at 854x480 using a 2x nearest-neighbour scale.
@@ -30,12 +31,14 @@ class App:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or load_settings()
         self.screen_name, self.selected, self.modal = "splash", 0, None
+        self.modal_kind: str | None = None
         self.pages: tuple[Page, ...] = ()
         self.selection_scroll = 0
         self.cursor = [0, 0]
         self.colored: set[tuple[int, int]] = set()
         self.current_color, self.steps, self.started = 0, 0, 0.0
         self.finished_at: float | None = None
+        self.completed = False
         self.camera = [0, 0]
         self.running = True
 
@@ -43,10 +46,48 @@ class App:
     def page(self) -> Page: return self.pages[self.selected]
 
     def begin(self) -> None:
-        self.screen_name, self.cursor, self.colored = "drawing", [0, 0], set()
-        self.current_color, self.steps, self.started, self.camera = 0, 0, time.monotonic(), [0, 0]
+        saved = self.progress.get(self.page.source, self.page.signature)
+        resetting_completed = bool(saved and saved.get("completed"))
+        if resetting_completed:
+            saved = None
+        self.screen_name = "drawing"
+        self.cursor = self._saved_cursor(saved)
+        self.colored = self._saved_colored(saved)
+        saved_steps = saved.get("steps", 0) if saved and isinstance(saved.get("steps", 0), int) else 0
+        saved_seconds = saved.get("seconds", 0) if saved and isinstance(saved.get("seconds", 0), int) else 0
+        self.current_color, self.steps = 0, saved_steps
+        self.started, self.camera = time.monotonic() - saved_seconds, [0, 0]
         self.finished_at = None
+        self.completed = False
         self._advance_color()
+        self._follow()
+        if resetting_completed:
+            self._save_progress()
+
+    def _saved_colored(self, saved: dict | None) -> set[tuple[int, int]]:
+        if not saved:
+            return set()
+        valid = {(x, y) for y, row in enumerate(self.page.pixels) for x, value in enumerate(row) if value >= 0}
+        return {(item[0], item[1]) for item in saved.get("colored", []) if isinstance(item, list) and len(item) == 2 and all(isinstance(value, int) for value in item) and (item[0], item[1]) in valid}
+
+    def _saved_cursor(self, saved: dict | None) -> list[int]:
+        cursor = saved.get("cursor", [0, 0]) if saved else [0, 0]
+        if not isinstance(cursor, list) or len(cursor) != 2:
+            return [0, 0]
+        if not all(isinstance(value, int) for value in cursor):
+            return [0, 0]
+        return [max(0, min(self.page.size - 1, cursor[0])), max(0, min(self.page.size - 1, cursor[1]))]
+
+    def _elapsed_seconds(self) -> int:
+        return int((self.finished_at if self.finished_at is not None else time.monotonic()) - self.started)
+
+    def _save_progress(self) -> None:
+        self.progress.save(self.page.source, self.page.signature, self.colored, self.cursor, self._elapsed_seconds(), self.steps, self.completed)
+
+    def clear_image(self) -> None:
+        self.cursor, self.colored, self.current_color, self.steps = [0, 0], set(), 0, 0
+        self.started, self.finished_at, self.completed, self.camera = time.monotonic(), None, False, [0, 0]
+        self._save_progress()
 
     def reload_pages(self) -> None:
         """Refresh external art while retaining the same file focus when possible."""
@@ -55,9 +96,12 @@ class App:
         self.selected = next((index for index, page in enumerate(self.pages) if page.source == focused), min(self.selected, max(0, len(self.pages) - 1)))
         self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(self.pages) - 1) // GRID_COLUMNS - 1))) if self.pages else 0
         self.page_surfaces = {page: self._page_surface(page) for page in self.pages}
+        self.preview_surfaces = {page: self._page_surface(page, self._saved_colored(self.progress.get(page.source, page.signature))) for page in self.pages}
         self.scaled_pages = {}
 
     def return_to_selection(self) -> None:
+        if self.screen_name in ("drawing", "result") and self.pages:
+            self._save_progress()
         self.reload_pages()
         self.screen_name = "selection"
 
@@ -69,6 +113,8 @@ class App:
             self.current_color += 1
         if self.current_color == self.page.color_count:
             self.finished_at = time.monotonic()
+            self.completed = True
+            self._save_progress()
             self.screen_name = "result"
 
     def move(self, action: Action) -> None:
@@ -93,18 +139,20 @@ class App:
     def handle(self, action: Action) -> None:
         if self.modal:
             if action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN): self.modal = "yes" if self.modal == "no" else "no"
-            elif action is Action.SELECT: self.modal = None
+            elif action is Action.SELECT:
+                self.modal = None; self.modal_kind = None
             elif action is Action.START:
                 if self.modal == "yes":
-                    if self.screen_name == "selection": self.running = False
-                    elif self.screen_name == "drawing": self.return_to_selection()
-                self.modal = None
+                    if self.modal_kind == "exit_game": self.running = False
+                    elif self.modal_kind == "exit_drawing": self.return_to_selection()
+                    elif self.modal_kind == "clear": self.clear_image()
+                self.modal = None; self.modal_kind = None
             return
         if self.screen_name == "splash":
             if action is Action.START: self.screen_name = "selection"
             elif action is Action.SELECT: self.running = False
         elif self.screen_name == "selection":
-            if action is Action.SELECT: self.modal = "no"
+            if action is Action.SELECT: self.modal, self.modal_kind = "no", "exit_game"
             elif action is Action.START and self.pages: self.begin()
             elif action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN):
                 dx, dy = {Action.LEFT:(-1,0), Action.RIGHT:(1,0), Action.UP:(0,-1), Action.DOWN:(0,1)}[action]
@@ -118,7 +166,8 @@ class App:
                     self.selected = proposed
                     self.selection_scroll = max(0, min(self.selected // GRID_COLUMNS - 1, max(0, (len(self.pages) - 1) // GRID_COLUMNS - 1)))
         elif self.screen_name == "drawing":
-            if action is Action.SELECT: self.modal = "no"
+            if action is Action.SELECT: self.modal, self.modal_kind = "no", "exit_drawing"
+            elif action is Action.START: self.modal, self.modal_kind = "no", "clear"
             elif action is Action.DEBUG_JUMP_END:
                 self.finished_at = time.monotonic()
                 self.screen_name = "result"
@@ -144,18 +193,18 @@ class App:
         key = (page, rect.size)
         image = self.scaled_pages.get(key)
         if image is None:
-            image = pygame.transform.scale(self.page_surfaces[page], rect.size)
+            image = pygame.transform.scale(self.preview_surfaces[page], rect.size)
             self.scaled_pages[key] = image
         self.screen.blit(image, rect)
 
-    def _page_surface(self, page: Page) -> pygame.Surface:
+    def _page_surface(self, page: Page, colored: set[tuple[int, int]] | None = None) -> pygame.Surface:
         """Build one native-resolution page; scaling the whole image avoids seams."""
         surface = pygame.Surface((page.size, page.size))
         surface.fill(INK)
         for y, row in enumerate(page.pixels):
             for x, value in enumerate(row):
                 if value >= 0:
-                    surface.set_at((x, y), page.palette[value])
+                    surface.set_at((x, y), page.palette[value] if colored is None or (x, y) in colored else GREY)
         return surface
 
     def _selection(self, font, small):
@@ -200,7 +249,7 @@ class App:
         total = sum(value >= 0 for row in page.pixels for value in row); pct = round(100*len(self.colored)/total) if total else 100
         percent = self.hud_percent_font.render(f"{pct}%", False, WHITE)
         self.screen.blit(percent, percent.get_rect(center=(hud_x + HUD_W // 2, 20)))
-        elapsed = int(time.monotonic() - self.started)
+        elapsed = self._elapsed_seconds()
         self.screen.blit(self.hud_icons["time"], (hud_x + 2, 44)); self._text(font, f"{elapsed}s", (hud_x + 30, 48))
         self.screen.blit(self.hud_icons["feet"], (hud_x + 2, 72)); self._text(font, str(self.steps), (hud_x + 30, 76))
         upcoming = page.palette[self.current_color + 1:]
@@ -220,8 +269,7 @@ class App:
 
     def _result(self, font, small):
         page = self.page
-        elapsed = (self.finished_at if self.finished_at is not None else time.monotonic()) - self.started
-        values = (("time", f"{int(elapsed)}s"), ("feet", str(self.steps)), ("palette", f"{page.color_count}/{page.color_count}"))
+        values = (("time", f"{self._elapsed_seconds()}s"), ("feet", str(self.steps)), ("palette", f"{page.color_count}/{page.color_count}"))
         value_images = [(self.icons[name], font.render(text, False, WHITE)) for name, text in values]
         values_width = max(icon.get_width() + 8 + text.get_width() for icon, text in value_images)
         image_size, gap = 160, 24
@@ -247,7 +295,8 @@ class App:
     def _modal(self, font, small):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); overlay.fill((0,0,0,175)); self.screen.blit(overlay,(0,0))
         rect=pygame.Rect(125,85,177,70); pygame.draw.rect(self.screen,(57,64,91),rect); pygame.draw.rect(self.screen,WHITE,rect,1)
-        question = self.bold_font.render(self.settings.exit_confirmation_text, False, WHITE)
+        question_text = self.settings.clear_confirmation_text if self.modal_kind == "clear" else self.settings.exit_confirmation_text
+        question = self.bold_font.render(question_text, False, WHITE)
         yes = small.render(self.settings.exit_confirm_button, False, (255,219,84) if self.modal=="yes" else WHITE)
         no = small.render(self.settings.exit_cancel_button, False, (255,219,84) if self.modal=="no" else WHITE)
         gap = 16
@@ -278,6 +327,7 @@ class App:
         self.backgrounds = {name: pygame.image.load(asset_directory / "backgrounds" / f"{name}.png").convert() for name in ("intro", "selection", "drawing", "result")}
         self.hud_icons = {name: pygame.transform.scale(image, (24, 24)) for name, image in self.icons.items()}
         self.hud_percent_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
+        self.progress = ProgressStore(Path(__file__).resolve().parents[3] / ".pixel-colors-progress.json")
         self.scaled_pages: dict[tuple[Page, tuple[int, int]], pygame.Surface] = {}
         self.reload_pages()
         joystick=JoystickInput() if settings.backend=="pygame" else None; console=ConsoleInput() if settings.backend=="fbdev" else None; clock=pygame.time.Clock()

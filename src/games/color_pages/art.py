@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 
 import pygame
@@ -14,6 +15,7 @@ VALID_SIZES = frozenset((16, 32, 64))
 class Page:
     title: str
     source: Path
+    signature: str
     size: int
     palette: tuple[Color, ...]
     pixels: tuple[tuple[int, ...], ...]  # -1 is transparent / always-black background.
@@ -59,5 +61,9 @@ def load_pages(directory: Path) -> tuple[Page, ...]:
                 pixels.append(tuple(row))
         except pygame.error:
             continue
-        pages.append(Page(path.stem, path, width, tuple(palette), tuple(pixels)))
+        try:
+            signature = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+        pages.append(Page(path.stem, path, signature, width, tuple(palette), tuple(pixels)))
     return tuple(pages)

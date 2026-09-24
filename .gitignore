@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 *.so
 pi-py-games.ini
+.pixel-colors-progress.json
 config/*.ini
 .pytest_cache/
 /research/

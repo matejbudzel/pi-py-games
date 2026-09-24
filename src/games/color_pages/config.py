@@ -12,6 +12,7 @@ class Settings:
     title: str
     art_directory: Path
     no_images_text: str
+    clear_confirmation_text: str
     exit_confirmation_text: str
     exit_confirm_button: str
     exit_cancel_button: str
@@ -28,6 +29,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         parser.get("game", "title", fallback="PIXEL FARBY").strip() or "PIXEL FARBY",
         art_directory,
         parser.get("art", "no_images_text", fallback="Žiadne obrázky nie sú k dispozícii").strip() or "Žiadne obrázky nie sú k dispozícii",
+        parser.get("gameplay", "clear_confirmation_text", fallback="Vymazať obrázok?").strip() or "Vymazať obrázok?",
         parser.get("exit", "confirmation_text", fallback="Naozaj skončiť?").strip() or "Naozaj skončiť?",
         parser.get("exit", "confirm_button", fallback="Áno").strip() or "Áno",
         parser.get("exit", "cancel_button", fallback="Nie").strip() or "Nie",
