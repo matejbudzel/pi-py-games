@@ -178,31 +178,44 @@ class App:
         hud_x = WIDTH-HUD_W; pygame.draw.rect(self.screen, (45, 51, 75), (hud_x, 0, HUD_W, HEIGHT))
         total = sum(value >= 0 for row in page.pixels for value in row); pct = round(100*len(self.colored)/total) if total else 100
         percent = self.hud_percent_font.render(f"{pct}%", False, WHITE)
-        self.screen.blit(percent, percent.get_rect(center=(hud_x + HUD_W // 2, 16)))
+        self.screen.blit(percent, percent.get_rect(center=(hud_x + HUD_W // 2, 20)))
         elapsed = int(time.monotonic() - self.started)
         self.screen.blit(self.hud_icons["time"], (hud_x + 2, 44)); self._text(font, f"{elapsed}s", (hud_x + 30, 48))
         self.screen.blit(self.hud_icons["feet"], (hud_x + 2, 72)); self._text(font, str(self.steps), (hud_x + 30, 76))
-        palette_rows = (page.color_count + 1) // 2
-        palette_y = HEIGHT - 5 - (palette_rows - 1) * 12
-        active_y = palette_y - 17
-        label_y = active_y - 26
+        upcoming = page.palette[self.current_color + 1:]
+        palette_rows = (len(upcoming) + 1) // 2
+        palette_y = HEIGHT - 8 - 5 - max(0, palette_rows - 1) * 10
+        active_y = palette_y - 23 if upcoming else HEIGHT - 8 - 10
+        label_y = active_y - 34
         used_colors = len({page.pixels[y][x] for x, y in self.colored})
         self.screen.blit(self.hud_icons["palette"], (hud_x + 2, label_y - 4))
         self._text(font, f"{used_colors}/{page.color_count}", (hud_x + 30, label_y))
         if self.current_color < page.color_count:
             pygame.draw.circle(self.screen, page.palette[self.current_color], (hud_x + HUD_W // 2, active_y), 10)
-        for index, color in enumerate(page.palette):
-            pygame.draw.circle(self.screen, color, (hud_x + 23 + (index % 2)*18, palette_y + (index // 2)*12), 5)
+        for index, color in enumerate(upcoming):
+            pygame.draw.circle(self.screen, color, (hud_x + 23 + (index % 2)*18, palette_y + (index // 2)*10), 5)
 
     def _result(self, font, small):
-        page = self.page; scale = min(160/page.size, 180/page.size); ox, oy = 90, (HEIGHT-page.size*scale)/2
-        for y,row in enumerate(page.pixels):
-            for x,value in enumerate(row):
-                if value >= 0: pygame.draw.rect(self.screen, page.palette[value], (ox+x*scale, oy+y*scale, scale, scale))
+        page = self.page
         elapsed = (self.finished_at if self.finished_at is not None else time.monotonic()) - self.started
-        self.screen.blit(self.icons["time"], (260, 68)); self._text(font, f"{int(elapsed)}s", (316, 84))
-        self.screen.blit(self.icons["feet"], (260, 124)); self._text(font, f"{self.steps}", (316, 140))
-        self.screen.blit(self.icons["palette"], (260, 180)); self._text(font, f"{page.color_count}/{page.color_count}", (316, 196))
+        values = (("time", f"{int(elapsed)}s"), ("feet", str(self.steps)), ("palette", f"{page.color_count}/{page.color_count}"))
+        value_images = [(self.icons[name], font.render(text, False, WHITE)) for name, text in values]
+        values_width = max(icon.get_width() + 8 + text.get_width() for icon, text in value_images)
+        image_size, gap = 160, 24
+        block_width = image_size + gap + values_width
+        left = (WIDTH - block_width) // 2
+        image_key = (page, (image_size, image_size))
+        image = self.scaled_pages.get(image_key)
+        if image is None:
+            image = pygame.transform.scale(self.page_surfaces[page], image_key[1])
+            self.scaled_pages[image_key] = image
+        self.screen.blit(image, (left, (HEIGHT - image_size) // 2))
+        values_y = (HEIGHT - len(value_images) * 48) // 2
+        values_x = left + image_size + gap
+        for index, (icon, text) in enumerate(value_images):
+            y = values_y + index * 48
+            self.screen.blit(icon, (values_x, y))
+            self.screen.blit(text, (values_x + icon.get_width() + 8, y + (icon.get_height() - text.get_height()) // 2))
 
     def _modal(self, font, small):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); overlay.fill((0,0,0,175)); self.screen.blit(overlay,(0,0))
@@ -235,7 +248,7 @@ class App:
         asset_directory = Path(__file__).with_name("assets")
         self.icons = {name: pygame.image.load(asset_directory / f"{name}.png").convert_alpha() for name in ("feet", "palette", "time")}
         self.hud_icons = {name: pygame.transform.scale(image, (24, 24)) for name, image in self.icons.items()}
-        self.hud_percent_font = pygame.font.Font(SWEET16_FONT_PATH, 24); self.hud_percent_font.set_bold(True)
+        self.hud_percent_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
         self.page_surfaces = {page: self._page_surface(page) for page in PAGES}
         self.scaled_pages: dict[tuple[Page, tuple[int, int]], pygame.Surface] = {}
         joystick=JoystickInput() if settings.backend=="pygame" else None; console=ConsoleInput() if settings.backend=="fbdev" else None; clock=pygame.time.Clock()
