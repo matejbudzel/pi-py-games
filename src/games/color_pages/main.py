@@ -323,8 +323,11 @@ class App:
         for glyph in glyphs:
             self.rainbow_title.blit(glyph, (x, 0)); x += glyph.get_width()
         asset_directory = Path(__file__).with_name("assets")
-        self.icons = {name: pygame.image.load(asset_directory / f"{name}.png").convert_alpha() for name in ("feet", "palette", "time")}
-        self.backgrounds = {name: pygame.image.load(asset_directory / "backgrounds" / f"{name}.png").convert() for name in ("intro", "selection", "drawing", "result")}
+        # fbdev intentionally has no SDL display surface, so neither convert()
+        # nor convert_alpha() is available here.  Keep the loaded PNG surfaces
+        # in their native format; Pygame can still blit their alpha correctly.
+        self.icons = {name: pygame.image.load(asset_directory / f"{name}.png") for name in ("feet", "palette", "time")}
+        self.backgrounds = {name: pygame.image.load(asset_directory / "backgrounds" / f"{name}.png") for name in ("intro", "selection", "drawing", "result")}
         self.hud_icons = {name: pygame.transform.scale(image, (24, 24)) for name, image in self.icons.items()}
         self.hud_percent_font = pygame.font.Font(SWEET16_FONT_PATH, 24)
         self.progress = ProgressStore(Path(__file__).resolve().parents[3] / ".pixel-colors-progress.json")
