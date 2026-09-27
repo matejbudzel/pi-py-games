@@ -74,3 +74,21 @@ def test_soft_drop_holds_after_delay_and_stops_on_release(tmp_path):
     app.release(Release(Action.DOWN))
     app.update(2)
     assert app.game.current.y == initial_y + 2
+
+
+def test_piece_and_performance_overlay_use_small_dirty_regions(tmp_path):
+    app = App(replace(load_settings(), high_score_path=tmp_path / "scores.json"))
+    pygame.font.init()
+    app.screen = pygame.Surface((427, 240))
+    app.canvas = pygame.Surface((427, 240))
+    app.backgrounds = {name: pygame.Surface((427, 240)) for name in ("splash", "game", "result")}
+    font, large = pygame.font.Font(None, 16), pygame.font.Font(None, 24)
+    app.start_game()
+    app.countdown_until = 0
+    assert app._draw_pending(font, large) == [pygame.Rect(0, 0, 427, 240)]
+    app.handle(Action.RIGHT)
+    moved = app._draw_pending(font, large)
+    assert moved and all(rect != pygame.Rect(0, 0, 427, 240) for rect in moved)
+    app.handle(Action.DEBUG_TOGGLE_PERFORMANCE)
+    overlay = app._draw_pending(font, large)
+    assert overlay and all(rect != pygame.Rect(0, 0, 427, 240) for rect in overlay)

@@ -28,6 +28,8 @@ COLORS = {"I": (91, 214, 238), "O": (255, 218, 83), "T": (183, 126, 255), "S": (
 CELL, BOARD_X, BOARD_Y = 10, 164, 18
 BOARD_RECT = pygame.Rect(BOARD_X, BOARD_Y, BOARD_WIDTH * CELL, BOARD_HEIGHT * CELL)
 FULL_RECT = pygame.Rect(0, 0, WIDTH, HEIGHT)
+LEFT_HUD_RECT = pygame.Rect(8, 8, 148, 92)
+RIGHT_HUD_RECT = pygame.Rect(280, 8, WIDTH - 288, 200)
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "blocks-performance.txt"
 
 
@@ -47,7 +49,11 @@ class App:
         self.new_high_score = False
         self.running = True
         self.dirty = True
+        self.game_board_dirty = False
+        self.game_hud_dirty = False
+        self.game_cell_dirty: set[tuple[int, int]] = set()
         self.show_performance_hud = False
+        self.performance_rect: pygame.Rect | None = None
         self.performance = PerformanceTracker()
         self.presentation_frames = 0
         self.total_scale_ms = self.max_scale_ms = 0.0
@@ -78,7 +84,6 @@ class App:
     def handle(self, action: Action, *, can_hold: bool = True) -> None:
         if action is Action.DEBUG_TOGGLE_PERFORMANCE:
             self.show_performance_hud = not self.show_performance_hud
-            self.dirty = True
             return
         if self.modal:
             if action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN):
@@ -115,13 +120,14 @@ class App:
         elif action is Action.START:
             self.paused, self.soft_drop_held, self.dirty = True, False, True
         elif self._countdown_value(time.monotonic()) == 0 and self.game:
+            before = self._game_snapshot()
             if action is Action.LEFT: self.game.move(-1, 0)
             elif action is Action.RIGHT: self.game.move(1, 0)
             elif action is Action.DOWN: self._soft_drop_pressed(can_hold)
             elif action is Action.LEFT_UP: self.game.rotate(-1)
             elif action in (Action.UP, Action.RIGHT_UP): self.game.rotate(1)
             if action is not Action.DOWN: self._check_game_over()
-            self.dirty = True
+            self._mark_game_change(before)
 
     def release(self, released: Release) -> None:
         if released.action is Action.DOWN:
@@ -142,6 +148,32 @@ class App:
             self.screen_name = "result"
             self.dirty = True
 
+    def _game_snapshot(self) -> tuple[tuple[tuple[int, int], ...], list[list[str | None]], tuple[int, int, int, str]]:
+        """Capture the small mutable state needed to decide what must repaint."""
+        assert self.game is not None
+        piece_cells = self._piece_positions()
+        board = [row[:] for row in self.game.board]
+        return piece_cells, board, (self.game.score, self.game.lines, self.game.level, self.game.next_name)
+
+    def _piece_positions(self) -> tuple[tuple[int, int], ...]:
+        if not self.game or not self.game.current:
+            return ()
+        return tuple((x + self.game.current.x, y + self.game.current.y) for x, y in self.game.current.cells)
+
+    def _mark_game_change(self, before: tuple[tuple[tuple[int, int], ...], list[list[str | None]], tuple[int, int, int, str]]) -> None:
+        """Mark only the scene regions altered by a move, lock, or score change."""
+        if self.screen_name != "game" or not self.game:
+            self.dirty = True
+            return
+        old_cells, old_board, old_stats = before
+        if old_board != self.game.board:
+            self.game_board_dirty = True
+        else:
+            self.game_cell_dirty.update(old_cells)
+            self.game_cell_dirty.update(self._piece_positions())
+        if old_stats != (self.game.score, self.game.lines, self.game.level, self.game.next_name):
+            self.game_hud_dirty = True
+
     def update(self, now: float) -> None:
         if self.screen_name != "game" or self.modal or self.paused or not self.game:
             return
@@ -153,17 +185,19 @@ class App:
         if self.next_fall == 0.0:
             self.next_fall = now + self.game.fall_seconds
         if self.soft_drop_held and now >= self.next_soft_drop:
+            before = self._game_snapshot()
             self.game.soft_drop()
             self.next_soft_drop = now + self.settings.soft_drop_repeat_seconds
             self._check_game_over()
-            self.dirty = True
+            self._mark_game_change(before)
             if self.screen_name != "game":
                 return
         if now >= self.next_fall:
+            before = self._game_snapshot()
             self.game.tick()
             self.next_fall = now + self.game.fall_seconds
             self._check_game_over()
-            self.dirty = True
+            self._mark_game_change(before)
 
     def _text(self, font: pygame.font.Font, text: str, position: tuple[int, int], color=WHITE, *, center=False) -> None:
         image = font.render(text, False, color)
@@ -176,7 +210,6 @@ class App:
         elif self.screen_name == "game": self._draw_game(font, large)
         else: self._draw_result(font, large)
         if self.modal: self._draw_modal(font, large)
-        if self.show_performance_hud: self._draw_performance(font)
 
     def _draw_splash(self, font, large) -> None:
         self._text(large, self.settings.title, (WIDTH // 2, 84), GOLD, center=True)
@@ -186,14 +219,31 @@ class App:
 
     def _draw_game(self, font, large) -> None:
         assert self.game is not None
-        pygame.draw.rect(self.screen, PANEL, BOARD_RECT.inflate(8, 8), border_radius=3)
-        pygame.draw.rect(self.screen, WHITE, BOARD_RECT.inflate(8, 8), 1, border_radius=3)
-        for y, row in enumerate(self.game.board):
-            for x, name in enumerate(row):
-                self._draw_cell(x, y, name)
+        self._draw_game_board(full=True)
+        self._draw_game_hud(font, large)
+        if self.paused:
+            self._shade(); self._text(large, self.settings.pause_text, (WIDTH // 2, HEIGHT // 2), GOLD, center=True)
+        elif (value := self._countdown_value(time.monotonic())):
+            self._shade(); self._text(large, str(value), (WIDTH // 2, HEIGHT // 2), GOLD, center=True)
+
+    def _draw_game_board(self, *, full: bool, cells: set[tuple[int, int]] | None = None) -> None:
+        assert self.game is not None
+        if full:
+            pygame.draw.rect(self.screen, PANEL, BOARD_RECT.inflate(8, 8), border_radius=3)
+            pygame.draw.rect(self.screen, WHITE, BOARD_RECT.inflate(8, 8), 1, border_radius=3)
+            cells = {(x, y) for y in range(BOARD_HEIGHT) for x in range(BOARD_WIDTH)}
+        for x, y in cells or ():
+            if 0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT:
+                self._draw_cell(x, y, self.game.board[y][x])
         if self.game.current:
             for x, y in self.game.current.cells:
                 self._draw_cell(x + self.game.current.x, y + self.game.current.y, self.game.current.name)
+
+    def _draw_game_hud(self, font, large, *, restore: bool = False) -> None:
+        assert self.game is not None
+        if restore:
+            for rectangle in (LEFT_HUD_RECT, RIGHT_HUD_RECT):
+                self.screen.blit(self.backgrounds["game"], rectangle.topleft, rectangle)
         self._text(large, self.settings.title, (17, 19), GOLD)
         self._text(font, "REKORD", (17, 54), MUTED)
         self._text(large, str(self.high_scores.high_score), (17, 69), GOLD if self.game.score >= self.high_scores.high_score and self.game.score else WHITE)
@@ -205,10 +255,30 @@ class App:
         self._text(large, str(self.game.lines), (285, 127), WHITE)
         self._text(font, "ĎALŠÍ", (285, 159), MUTED)
         self._draw_preview(self.game.next_name, 313, 181)
-        if self.paused:
-            self._shade(); self._text(large, self.settings.pause_text, (WIDTH // 2, HEIGHT // 2), GOLD, center=True)
-        elif (value := self._countdown_value(time.monotonic())):
-            self._shade(); self._text(large, str(value), (WIDTH // 2, HEIGHT // 2), GOLD, center=True)
+
+    def _draw_game_pending(self, font, large) -> list[pygame.Rect]:
+        """Refresh retained gameplay pixels without touching the whole canvas."""
+        dirty: list[pygame.Rect] = []
+        if self.game_board_dirty:
+            self._draw_game_board(full=True)
+            self.game_board_dirty = False
+            self.game_cell_dirty.clear()
+            dirty.append(BOARD_RECT.inflate(8, 8))
+        elif self.game_cell_dirty:
+            cells = self.game_cell_dirty.copy()
+            self._draw_game_board(full=False, cells=cells)
+            self.game_cell_dirty.clear()
+            cell_rectangles = [pygame.Rect(BOARD_X + x * CELL, BOARD_Y + y * CELL, CELL, CELL) for x, y in cells if 0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT]
+            if cell_rectangles:
+                changed = cell_rectangles[0].copy()
+                for rectangle in cell_rectangles[1:]:
+                    changed.union_ip(rectangle)
+                dirty.append(changed)
+        if self.game_hud_dirty:
+            self._draw_game_hud(font, large, restore=True)
+            self.game_hud_dirty = False
+            dirty.extend((LEFT_HUD_RECT, RIGHT_HUD_RECT))
+        return dirty
 
     def _draw_cell(self, x: int, y: int, name: str | None) -> None:
         rect = pygame.Rect(BOARD_X + x * CELL, BOARD_Y + y * CELL, CELL, CELL)
@@ -262,13 +332,42 @@ class App:
         self.screen.blit(yes_image, (buttons_x, buttons_y))
         self.screen.blit(no_image, (buttons_x + yes_image.get_width() + gap, buttons_y))
 
-    def _draw_performance(self, font) -> None:
+    def _draw_performance(self, surface: pygame.Surface, font) -> pygame.Rect:
         timing = self.performance.latest
         lines = (f"{timing.frames_per_second:4.1f} FPS {timing.frame_ms:4.1f}", f"r{timing.render_ms:3.1f} s{self.last_scale_ms:3.1f} p{timing.present_ms:3.1f}")
         images = [font.render(line, False, (180, 255, 180)) for line in lines]
         rect = pygame.Rect(4, HEIGHT - sum(image.get_height() for image in images) - 8, max(image.get_width() for image in images) + 8, sum(image.get_height() for image in images) + 6)
-        pygame.draw.rect(self.screen, (0, 0, 0), rect); pygame.draw.rect(self.screen, (90, 150, 90), rect, 1)
-        for index, image in enumerate(images): self.screen.blit(image, (rect.x + 4, rect.y + 3 + index * image.get_height()))
+        pygame.draw.rect(surface, (0, 0, 0), rect); pygame.draw.rect(surface, (90, 150, 90), rect, 1)
+        for index, image in enumerate(images): surface.blit(image, (rect.x + 4, rect.y + 3 + index * image.get_height()))
+        return rect
+
+    def _draw_pending(self, font, large) -> list[pygame.Rect]:
+        """Copy only changed retained-scene areas to the display canvas."""
+        if self.dirty:
+            self.draw(font, large)
+            self.dirty = False
+            self.game_board_dirty = self.game_hud_dirty = False
+            self.game_cell_dirty.clear()
+            dirty = [FULL_RECT]
+        elif self.screen_name == "game" and self.modal is None and not self.paused and self._countdown_value(time.monotonic()) == 0:
+            dirty = self._draw_game_pending(font, large)
+        else:
+            dirty = []
+        for rectangle in dirty:
+            self.canvas.blit(self.screen, rectangle.topleft, rectangle)
+        # The HUD is drawn on the display canvas, never on the retained scene.
+        # It therefore measures normal rendering behaviour plus only its own
+        # small dirty rectangle instead of forcing a full-frame path.
+        previous_performance_rect = self.performance_rect
+        if previous_performance_rect is not None:
+            self.canvas.blit(self.screen, previous_performance_rect.topleft, previous_performance_rect)
+            self.performance_rect = None
+        if self.show_performance_hud:
+            self.performance_rect = self._draw_performance(self.canvas, font)
+            dirty.append(previous_performance_rect.union(self.performance_rect) if previous_performance_rect else self.performance_rect)
+        elif previous_performance_rect is not None:
+            dirty.append(previous_performance_rect)
+        return dirty
 
     def _write_performance_report(self) -> None:
         report = self.performance.report() + f"average_scale_ms={self.total_scale_ms / max(1, self.presentation_frames):.3f}\nmaximum_scale_ms={self.max_scale_ms:.3f}\naverage_backend_present_ms={self.total_backend_present_ms / max(1, self.presentation_frames):.3f}\nmaximum_backend_present_ms={self.max_backend_present_ms:.3f}\n"
@@ -281,7 +380,11 @@ class App:
     def run(self) -> None:
         platform = display_settings(); initialize_pygame(platform)
         if platform.backend == "pygame": pygame.display.set_caption(self.settings.title)
-        display = GameDisplay(platform, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT)); self.screen = display.canvas
+        display = GameDisplay(platform, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT))
+        self.canvas = display.canvas
+        self.screen = pygame.Surface(
+            (WIDTH, HEIGHT), depth=self.canvas.get_bitsize(), masks=self.canvas.get_masks()
+        )
         asset_directory = Path(__file__).with_name("assets") / "backgrounds"
         # Keep these at the logical resolution so no runtime scaling or
         # decoding work is needed while the game is playing.
@@ -315,14 +418,15 @@ class App:
                     for action in actions:
                         if isinstance(action, Action): self.handle(action)
                         elif isinstance(action, Release): self.release(action)
-                    input_done = time.perf_counter(); self.update(time.monotonic())
-                    if self.dirty or self.show_performance_hud:
-                        self.draw(font, large); self.dirty = False; render_done = time.perf_counter(); display.present([FULL_RECT]); self.presentation_frames += 1
+                    input_done = time.perf_counter(); self.update(time.monotonic()); update_done = time.perf_counter()
+                    dirty_rectangles = self._draw_pending(font, large)
+                    render_done = time.perf_counter()
+                    if dirty_rectangles:
+                        display.present(dirty_rectangles); self.presentation_frames += 1
                         self.last_scale_ms = display.last_scale_ms; self.total_scale_ms += self.last_scale_ms; self.max_scale_ms = max(self.max_scale_ms, self.last_scale_ms)
                         self.total_backend_present_ms += display.last_backend_present_ms; self.max_backend_present_ms = max(self.max_backend_present_ms, display.last_backend_present_ms)
-                    else: render_done = time.perf_counter()
                     present_done = time.perf_counter(); clock.tick(FPS); finished = time.perf_counter()
-                    self.performance.record(FrameTiming(input_ms=(input_done-started)*1000, update_ms=(render_done-input_done)*1000, render_ms=(render_done-input_done)*1000, present_ms=(present_done-render_done)*1000, work_ms=(present_done-started)*1000, frame_ms=(finished-started)*1000))
+                    self.performance.record(FrameTiming(input_ms=(input_done-started)*1000, update_ms=(update_done-input_done)*1000, render_ms=(render_done-update_done)*1000, present_ms=(present_done-render_done)*1000, work_ms=(present_done-started)*1000, frame_ms=(finished-started)*1000))
         finally:
             self._write_performance_report(); display.close(); pygame.quit()
 
