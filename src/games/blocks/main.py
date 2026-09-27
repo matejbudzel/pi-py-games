@@ -12,7 +12,7 @@ from common.assets import SWEET16_FONT_PATH
 from common.console_input import ConsoleInput
 from common.display import GameDisplay, display_settings, initialize_pygame
 from common.error_logging import configure_logging
-from common.input import Action, actions_from_event
+from common.input import Action, Release
 from common.joystick_input import JoystickInput
 from common.performance import FrameTiming, PerformanceTracker
 from .config import Settings, load_settings
@@ -41,6 +41,8 @@ class App:
         self.countdown_until = 0.0
         self.paused = False
         self.next_fall = 0.0
+        self.soft_drop_held = False
+        self.next_soft_drop = 0.0
         self.high_scores = HighScoreStore(self.settings.high_score_path)
         self.new_high_score = False
         self.running = True
@@ -63,6 +65,8 @@ class App:
     def _begin_countdown(self) -> None:
         self.countdown_until = time.monotonic() + self.settings.countdown_seconds
         self.next_fall = 0.0
+        self.soft_drop_held = False
+        self.next_soft_drop = 0.0
         self._last_countdown = None
 
     def _countdown_value(self, now: float) -> int:
@@ -71,7 +75,7 @@ class App:
     def _open_modal(self, kind: str) -> None:
         self.modal, self.modal_yes, self.dirty = kind, False, True
 
-    def handle(self, action: Action) -> None:
+    def handle(self, action: Action, *, can_hold: bool = True) -> None:
         if action is Action.DEBUG_TOGGLE_PERFORMANCE:
             self.show_performance_hud = not self.show_performance_hud
             self.dirty = True
@@ -109,15 +113,28 @@ class App:
         if action is Action.SELECT:
             self._open_modal("leave")
         elif action is Action.START:
-            self.paused, self.dirty = True, True
+            self.paused, self.soft_drop_held, self.dirty = True, False, True
         elif self._countdown_value(time.monotonic()) == 0 and self.game:
             if action is Action.LEFT: self.game.move(-1, 0)
             elif action is Action.RIGHT: self.game.move(1, 0)
-            elif action is Action.DOWN: self.game.soft_drop()
+            elif action is Action.DOWN: self._soft_drop_pressed(can_hold)
             elif action is Action.LEFT_UP: self.game.rotate(-1)
             elif action in (Action.UP, Action.RIGHT_UP): self.game.rotate(1)
-            self._check_game_over()
+            if action is not Action.DOWN: self._check_game_over()
             self.dirty = True
+
+    def release(self, released: Release) -> None:
+        if released.action is Action.DOWN:
+            self.soft_drop_held = False
+            self.next_soft_drop = 0.0
+
+    def _soft_drop_pressed(self, can_hold: bool) -> None:
+        assert self.game is not None
+        self.game.soft_drop()
+        self._check_game_over()
+        if can_hold and self.screen_name == "game":
+            self.soft_drop_held = True
+            self.next_soft_drop = time.monotonic() + self.settings.soft_drop_hold_delay_seconds
 
     def _check_game_over(self) -> None:
         if self.game and self.game.game_over:
@@ -135,6 +152,13 @@ class App:
             return
         if self.next_fall == 0.0:
             self.next_fall = now + self.game.fall_seconds
+        if self.soft_drop_held and now >= self.next_soft_drop:
+            self.game.soft_drop()
+            self.next_soft_drop = now + self.settings.soft_drop_repeat_seconds
+            self._check_game_over()
+            self.dirty = True
+            if self.screen_name != "game":
+                return
         if now >= self.next_fall:
             self.game.tick()
             self.next_fall = now + self.game.fall_seconds
@@ -264,10 +288,16 @@ class App:
                     if console:
                         polled = console.poll_actions()
                         keyboard_count = getattr(console, "keyboard_action_count", 0)
-                        actions.extend(action for action in polled[:keyboard_count] if isinstance(action, Action))
+                        # A TTY has no key-up stream.  Its repeated bytes remain
+                        # independent taps rather than becoming a stuck hold.
+                        for action in polled[:keyboard_count]:
+                            if isinstance(action, Action): self.handle(action, can_hold=False)
                         # ConsoleInput keeps this matching raw button identity only
                         # as metadata; game state still receives Action values.
-                        actions.extend(action_for_pad_button(action, button) for action, button in getattr(console, "pad_action_events", ()))
+                        for action, button in getattr(console, "pad_action_events", ()):
+                            self.handle(action_for_pad_button(action, button))
+                        for item in polled[keyboard_count:]:
+                            if isinstance(item, Release): self.release(item)
                     else:
                         for event in pygame.event.get():
                             if event.type == pygame.QUIT: self.running = False
@@ -275,6 +305,7 @@ class App:
                             actions.extend(actions_from_blocks_event(event))
                     for action in actions:
                         if isinstance(action, Action): self.handle(action)
+                        elif isinstance(action, Release): self.release(action)
                     input_done = time.perf_counter(); self.update(time.monotonic())
                     if self.dirty or self.show_performance_hud:
                         self.draw(font, large); self.dirty = False; render_done = time.perf_counter(); display.present([FULL_RECT]); self.presentation_frames += 1

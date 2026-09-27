@@ -18,6 +18,8 @@ class Settings:
     no: str
     high_score_path: Path
     countdown_seconds: int
+    soft_drop_hold_delay_seconds: float
+    soft_drop_repeat_seconds: float
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
@@ -37,4 +39,6 @@ def load_settings(config_path: Path | None = None) -> Settings:
         no=parser.get("text", "no", fallback="Nie").strip() or "Nie",
         high_score_path=score_path,
         countdown_seconds=max(1, parser.getint("tuning", "countdown_seconds", fallback=3)),
+        soft_drop_hold_delay_seconds=max(0.0, parser.getfloat("tuning", "soft_drop_hold_delay_seconds", fallback=0.30)),
+        soft_drop_repeat_seconds=max(0.05, parser.getfloat("tuning", "soft_drop_repeat_seconds", fallback=0.20)),
     )

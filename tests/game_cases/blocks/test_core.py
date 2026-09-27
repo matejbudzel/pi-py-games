@@ -4,7 +4,7 @@ from dataclasses import replace
 from games.blocks.core import BOARD_HEIGHT, BOARD_WIDTH, Game, Piece
 from games.blocks.progress import HighScoreStore
 from games.blocks.input import actions_from_blocks_event
-from common.input import Action
+from common.input import Action, Release
 import pygame
 from games.blocks.config import load_settings
 from games.blocks.main import App
@@ -57,3 +57,20 @@ def test_pause_resume_and_result_actions_are_immediate(tmp_path):
     app.screen_name = "result"
     app.handle(Action.SELECT)
     assert not app.running
+
+
+def test_soft_drop_holds_after_delay_and_stops_on_release(tmp_path):
+    app = App(replace(load_settings(), high_score_path=tmp_path / "scores.json"))
+    app.start_game()
+    app.countdown_until = 0
+    app.next_fall = float("inf")
+    assert app.game is not None and app.game.current is not None
+    initial_y = app.game.current.y
+    app.handle(Action.DOWN)
+    assert app.game.current.y == initial_y + 1
+    app.next_soft_drop = 0
+    app.update(1)
+    assert app.game.current.y == initial_y + 2
+    app.release(Release(Action.DOWN))
+    app.update(2)
+    assert app.game.current.y == initial_y + 2
