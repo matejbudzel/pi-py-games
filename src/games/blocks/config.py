@@ -12,7 +12,6 @@ class Settings:
     title: str
     splash_text: str
     leave_question: str
-    play_again_question: str
     pause_text: str
     new_high_score_text: str
     yes: str
@@ -32,7 +31,6 @@ def load_settings(config_path: Path | None = None) -> Settings:
         title=parser.get("game", "title", fallback="BLOCKS").strip() or "BLOCKS",
         splash_text=parser.get("text", "splash_text", fallback="STLAČ ŠTART").strip() or "STLAČ ŠTART",
         leave_question=parser.get("text", "leave_question", fallback="Odísť?").strip() or "Odísť?",
-        play_again_question=parser.get("text", "play_again_question", fallback="Hrať znova?").strip() or "Hrať znova?",
         pause_text=parser.get("text", "pause_text", fallback="PAUZA").strip() or "PAUZA",
         new_high_score_text=parser.get("text", "new_high_score_text", fallback="NOVÝ REKORD!").strip() or "NOVÝ REKORD!",
         yes=parser.get("text", "yes", fallback="Áno").strip() or "Áno",

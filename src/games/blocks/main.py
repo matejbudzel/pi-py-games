@@ -81,17 +81,13 @@ class App:
                 self.modal_yes = not self.modal_yes
                 self.dirty = True
             elif action is Action.SELECT:
-                # Select always cancels; on the result screen that means exit.
-                kind = self.modal
                 self.modal = None
-                if kind == "again": self.running = False
                 self.dirty = True
             elif action is Action.START:
-                kind, accept = self.modal, self.modal_yes
+                accept = self.modal_yes
                 self.modal = None
                 if accept:
-                    if kind == "leave": self.running = False
-                    elif kind == "again": self.start_game()
+                    self.running = False
                 self.dirty = True
             return
         if self.screen_name == "splash":
@@ -99,7 +95,8 @@ class App:
             elif action is Action.SELECT: self.running = False
             return
         if self.screen_name == "result":
-            if action in (Action.START, Action.SELECT): self._open_modal("again")
+            if action is Action.START: self.start_game()
+            elif action is Action.SELECT: self.running = False
             return
         if self.paused:
             if action is Action.START:
@@ -208,22 +205,33 @@ class App:
         if self.new_high_score: self._text(font, self.settings.new_high_score_text, (WIDTH // 2, 78), (104, 221, 133), center=True)
         values = (("SKÓRE", self.game.score), ("RIADKY", self.game.lines), ("ÚROVEŇ", self.game.level), ("REKORD", self.high_scores.high_score))
         for index, (label, value) in enumerate(values):
-            x = 82 + (index % 2) * 150; y = 108 + (index // 2) * 48
+            # Two columns, centered together rather than anchored to the left.
+            x = WIDTH // 2 + (-75 if index % 2 == 0 else 75); y = 108 + (index // 2) * 48
             self._text(font, label, (x, y), MUTED, center=True)
-            self._text(large, str(value), (x, y + 16), WHITE, center=True)
-        self._text(font, "ŠTART", (WIDTH // 2, 211), MUTED, center=True)
+            self._text(large, str(value), (x, y + 22), WHITE, center=True)
+        self._text(font, "ŠTART -> NOVÁ HRA", (WIDTH // 2, 203), GOLD, center=True)
+        self._text(font, "SELECT -> KONIEC", (WIDTH // 2, 221), MUTED, center=True)
 
     def _shade(self) -> None:
         shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); shade.fill((0, 0, 0, 165)); self.screen.blit(shade, (0, 0))
 
     def _draw_modal(self, font, large) -> None:
         self._shade()
-        question = self.settings.leave_question if self.modal == "leave" else self.settings.play_again_question
+        question = self.settings.leave_question
         rect = pygame.Rect(114, 85, 199, 70)
         pygame.draw.rect(self.screen, PANEL, rect, border_radius=4); pygame.draw.rect(self.screen, WHITE, rect, 1, border_radius=4)
-        self._text(large, question, (rect.centerx, 103), WHITE, center=True)
-        self._text(font, self.settings.yes, (174, 130), GOLD if self.modal_yes else WHITE, center=True)
-        self._text(font, self.settings.no, (253, 130), GOLD if not self.modal_yes else WHITE, center=True)
+        question_image = large.render(question, False, WHITE)
+        yes_image = font.render(self.settings.yes, False, GOLD if self.modal_yes else WHITE)
+        no_image = font.render(self.settings.no, False, GOLD if not self.modal_yes else WHITE)
+        gap = 24
+        content_height = question_image.get_height() + 8 + max(yes_image.get_height(), no_image.get_height())
+        top = rect.centery - content_height // 2
+        self.screen.blit(question_image, question_image.get_rect(center=(rect.centerx, top + question_image.get_height() // 2)))
+        buttons_width = yes_image.get_width() + gap + no_image.get_width()
+        buttons_x = rect.centerx - buttons_width // 2
+        buttons_y = top + question_image.get_height() + 8
+        self.screen.blit(yes_image, (buttons_x, buttons_y))
+        self.screen.blit(no_image, (buttons_x + yes_image.get_width() + gap, buttons_y))
 
     def _draw_performance(self, font) -> None:
         timing = self.performance.latest

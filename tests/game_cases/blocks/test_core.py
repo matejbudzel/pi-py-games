@@ -40,7 +40,7 @@ def test_upper_pad_buttons_are_blocks_rotation_actions():
     assert actions_from_blocks_event(pygame.event.Event(pygame.JOYBUTTONDOWN, button=7)) == [Action.RIGHT_UP]
 
 
-def test_pause_resume_and_result_play_again_confirmation(tmp_path):
+def test_pause_resume_and_result_actions_are_immediate(tmp_path):
     app = App(replace(load_settings(), high_score_path=tmp_path / "scores.json"))
     app.handle(Action.START)
     assert app.screen_name == "game" and app.game is not None
@@ -52,7 +52,8 @@ def test_pause_resume_and_result_play_again_confirmation(tmp_path):
     app.game.game_over = True
     app._check_game_over()
     assert app.screen_name == "result"
-    app.handle(Action.SELECT)
-    assert app.modal == "again" and not app.modal_yes
+    app.handle(Action.START)
+    assert app.screen_name == "game" and app.modal is None
+    app.screen_name = "result"
     app.handle(Action.SELECT)
     assert not app.running
