@@ -3,6 +3,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+import pygame
+
 from common.input import Action
 from common.performance import FrameTiming
 from games.color_pages.main import App
@@ -15,6 +17,7 @@ class PixelColorsPerformanceTests(unittest.TestCase):
         app.handle(Action.DEBUG_TOGGLE_PERFORMANCE)
 
         self.assertTrue(app.show_performance_hud)
+        self.assertEqual(app.last_scale_ms, 0.0)
 
     def test_performance_report_includes_display_breakdown(self) -> None:
         app = App()
@@ -34,3 +37,14 @@ class PixelColorsPerformanceTests(unittest.TestCase):
         self.assertIn("average_render_ms=4.000", report)
         self.assertIn("average_scale_ms=3.000", report)
         self.assertIn("maximum_backend_present_ms=7.000", report)
+
+    def test_performance_hud_uses_the_recorded_scale_time(self) -> None:
+        pygame.font.init()
+        app = App()
+        app.screen = pygame.Surface((427, 240))
+        app.performance.record(FrameTiming(render_ms=4.0, frame_ms=20.0))
+        app.last_scale_ms = 3.0
+
+        app._performance_hud(pygame.font.Font(None, 16))
+
+        self.assertEqual(app.last_scale_ms, 3.0)

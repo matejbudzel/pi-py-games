@@ -52,6 +52,7 @@ class App:
         self.max_scale_ms = 0.0
         self.total_backend_present_ms = 0.0
         self.max_backend_present_ms = 0.0
+        self.last_scale_ms = 0.0
 
     @property
     def page(self) -> Page: return self.pages[self.selected]
@@ -328,7 +329,7 @@ class App:
         timing = self.performance.latest
         lines = (
             f"{timing.frames_per_second:4.1f} FPS {timing.frame_ms:5.1f} ms",
-            f"r{timing.render_ms:4.1f} s{self.display.last_scale_ms:4.1f} p{timing.present_ms:4.1f}",
+            f"r{timing.render_ms:4.1f} s{self.last_scale_ms:4.1f} p{timing.present_ms:4.1f}",
         )
         images = [font.render(line, False, (180, 255, 180)) for line in lines]
         width = max(image.get_width() for image in images) + 8
@@ -401,6 +402,7 @@ class App:
                     display.present()
                     present_finished = time.perf_counter()
                     self.presentation_frames += 1
+                    self.last_scale_ms = display.last_scale_ms
                     self.total_scale_ms += display.last_scale_ms
                     self.max_scale_ms = max(self.max_scale_ms, display.last_scale_ms)
                     self.total_backend_present_ms += display.last_backend_present_ms
