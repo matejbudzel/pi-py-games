@@ -8,7 +8,7 @@ import pygame
 from common.input import Action
 from common.performance import FrameTiming
 from games.color_pages.art import Page
-from games.color_pages.main import ART_BACKGROUND, App
+from games.color_pages.main import ART_BACKGROUND, RAINBOW, App
 
 
 class PixelColorsPerformanceTests(unittest.TestCase):
@@ -88,3 +88,4 @@ class PixelColorsPerformanceTests(unittest.TestCase):
 
         self.assertEqual(preview.get_at((0, 0))[:3], ART_BACKGROUND)
         self.assertEqual(app.screen.get_at(rectangle.center)[:3], ART_BACKGROUND)
+        self.assertEqual(app.screen.get_at((rectangle.x + 3, rectangle.y))[:3], RAINBOW[0])

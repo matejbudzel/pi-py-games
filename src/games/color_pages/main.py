@@ -307,8 +307,16 @@ class App:
         if value == self.current_color and (x, y) not in self.colored:
             pygame.draw.circle(self.screen, WHITE, rectangle.center, 3)
         if (x, y) == tuple(self.cursor):
-            pygame.draw.rect(self.screen, WHITE, rectangle, 1)
+            self._draw_rainbow_focus(rectangle)
         return rectangle
+
+    def _draw_rainbow_focus(self, rectangle: pygame.Rect) -> None:
+        """Keep the focused cell distinct over both light and dark artwork."""
+        left, top, right, bottom = rectangle.left, rectangle.top, rectangle.right - 1, rectangle.bottom - 1
+        pygame.draw.line(self.screen, RAINBOW[0], (left, top), (right, top), 2)
+        pygame.draw.line(self.screen, RAINBOW[1], (right, top), (right, bottom), 2)
+        pygame.draw.line(self.screen, RAINBOW[3], (right, bottom), (left, bottom), 2)
+        pygame.draw.line(self.screen, RAINBOW[4], (left, bottom), (left, top), 2)
 
     def _drawing(self, font):
         page = self.page; max_x, max_y, _, _ = self._drawing_geometry()
