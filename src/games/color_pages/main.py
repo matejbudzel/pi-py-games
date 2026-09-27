@@ -29,6 +29,8 @@ CELL, HUD_W = 22, 64
 GRID_COLUMNS = 3
 RAINBOW = ((255, 105, 112), (255, 181, 72), (255, 232, 92), (104, 221, 133), (94, 184, 255), (183, 126, 255))
 PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "pixel-colors-performance.txt"
+FULL_RECT = pygame.Rect(0, 0, WIDTH, HEIGHT)
+DRAWING_HUD_RECT = pygame.Rect(WIDTH - HUD_W, 0, HUD_W, HEIGHT)
 
 
 class App:
@@ -53,6 +55,10 @@ class App:
         self.total_backend_present_ms = 0.0
         self.max_backend_present_ms = 0.0
         self.last_scale_ms = 0.0
+        self._needs_full_redraw = True
+        self._drawing_dirty_rectangles: list[pygame.Rect] = []
+        self._drawing_hud_dirty = False
+        self._last_drawn_elapsed_seconds = -1
 
     @property
     def page(self) -> Page: return self.pages[self.selected]
@@ -198,6 +204,37 @@ class App:
         else: self._result(font, small)
         if self.modal: self._modal(font, small)
 
+    def _track_action_redraw(self, action: Action) -> None:
+        """Turn a state change into the smallest safe logical update."""
+        old_screen = self.screen_name
+        old_modal = self.modal
+        old_cursor = tuple(self.cursor)
+        old_camera = tuple(self.camera)
+        old_color = self.current_color
+        self.handle(action)
+        if action is Action.DEBUG_TOGGLE_PERFORMANCE:
+            # Turning the overlay off reveals pixels it covered.
+            self._needs_full_redraw = self._needs_full_redraw or not self.show_performance_hud
+            return
+        if (
+            old_screen == self.screen_name == "drawing"
+            and old_modal is None
+            and self.modal is None
+            and action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN)
+        ):
+            # A scroll or color advance changes many cells' target dots.  A
+            # normal move changes only its former/current cell and the HUD.
+            if old_camera != tuple(self.camera) or old_color != self.current_color:
+                self._needs_full_redraw = True
+            else:
+                self._drawing_dirty_rectangles.extend(
+                    rectangle for position in (old_cursor, tuple(self.cursor))
+                    if (rectangle := self._drawing_cell_rectangle(*position)) is not None
+                )
+                self._drawing_hud_dirty = True
+            return
+        self._needs_full_redraw = True
+
     def _text(self, font, text, pos, color=WHITE, center=False):
         image = font.render(text, False, color); self.screen.blit(image, image.get_rect(center=pos) if center else pos)
 
@@ -244,23 +281,44 @@ class App:
             if index < page.color_count:
                 pygame.draw.circle(self.screen, page.palette[index], (content_x + 7 + (index % 8)*15, 214 + (index // 8)*18), 7)
 
+    def _drawing_geometry(self) -> tuple[int, int, int, int]:
+        max_x, max_y = (WIDTH-HUD_W)//CELL, HEIGHT//CELL
+        return max_x, max_y, ((WIDTH - HUD_W) - max_x * CELL) // 2, (HEIGHT - max_y * CELL) // 2
+
+    def _drawing_cell_rectangle(self, x: int, y: int) -> pygame.Rect | None:
+        max_x, max_y, canvas_x, canvas_y = self._drawing_geometry()
+        screen_x, screen_y = x - self.camera[0], y - self.camera[1]
+        if not (0 <= screen_x < max_x and 0 <= screen_y < max_y):
+            return None
+        return pygame.Rect(canvas_x + screen_x * CELL, canvas_y + screen_y * CELL, CELL, CELL)
+
+    def _draw_drawing_cell(self, x: int, y: int) -> pygame.Rect | None:
+        rectangle = self._drawing_cell_rectangle(x, y)
+        if rectangle is None:
+            return None
+        value = self.page.pixels[y][x]
+        color = INK if value < 0 else (self.page.palette[value] if (x, y) in self.colored else GREY)
+        pygame.draw.rect(self.screen, INK, rectangle)
+        if value >= 0:
+            pygame.draw.rect(self.screen, color, rectangle.inflate(-2, -2))
+        if value == self.current_color and (x, y) not in self.colored:
+            pygame.draw.circle(self.screen, WHITE, rectangle.center, 3)
+        if (x, y) == tuple(self.cursor):
+            pygame.draw.rect(self.screen, WHITE, rectangle, 1)
+        return rectangle
+
     def _drawing(self, font):
-        page = self.page; max_x, max_y = (WIDTH-HUD_W)//CELL, HEIGHT//CELL
-        canvas_x = ((WIDTH - HUD_W) - max_x * CELL) // 2
-        canvas_y = (HEIGHT - max_y * CELL) // 2
+        page = self.page; max_x, max_y, _, _ = self._drawing_geometry()
         for sy in range(min(max_y, page.size-self.camera[1])):
             for sx in range(min(max_x, page.size-self.camera[0])):
-                x, y = sx+self.camera[0], sy+self.camera[1]; value = page.pixels[y][x]
-                color = INK if value < 0 else (page.palette[value] if (x,y) in self.colored else GREY)
-                rect = pygame.Rect(canvas_x + sx*CELL, canvas_y + sy*CELL, CELL, CELL)
-                pygame.draw.rect(self.screen, INK, rect)
-                if value >= 0:
-                    pygame.draw.rect(self.screen, color, rect.inflate(-2, -2))
-                if value == self.current_color and (x,y) not in self.colored: pygame.draw.circle(self.screen, WHITE, rect.center, 3)
-        sx = canvas_x + (self.cursor[0]-self.camera[0])*CELL
-        sy = canvas_y + (self.cursor[1]-self.camera[1])*CELL
-        pygame.draw.rect(self.screen, WHITE, (sx, sy, CELL, CELL), 1)
+                self._draw_drawing_cell(sx + self.camera[0], sy + self.camera[1])
+        self._drawing_hud(font)
+
+    def _drawing_hud(self, font, *, restore_background: bool = False) -> None:
+        page = self.page
         hud_x = WIDTH-HUD_W
+        if restore_background:
+            self.screen.blit(self.backgrounds["drawing"], DRAWING_HUD_RECT.topleft, DRAWING_HUD_RECT)
         total = sum(value >= 0 for row in page.pixels for value in row); pct = round(100*len(self.colored)/total) if total else 100
         percent = self.hud_percent_font.render(f"{pct}%", False, WHITE)
         self.screen.blit(percent, percent.get_rect(center=(hud_x + HUD_W // 2, 20)))
@@ -281,6 +339,33 @@ class App:
             pygame.draw.circle(self.screen, page.palette[self.current_color], (hud_x + HUD_W // 2, active_y), 10)
         for index, color in enumerate(upcoming):
             pygame.draw.circle(self.screen, color, (hud_x + 23 + (index % 2)*18, palette_y + (index // 2)*10), 5)
+
+    def _draw_pending(self, font: pygame.font.Font, small: pygame.font.Font) -> list[pygame.Rect]:
+        """Draw only changed logical areas; GameDisplay scales the same areas."""
+        dirty: list[pygame.Rect] = []
+        if self._needs_full_redraw:
+            self.draw(font, small)
+            self._needs_full_redraw = False
+            self._drawing_dirty_rectangles = []
+            self._drawing_hud_dirty = False
+            self._last_drawn_elapsed_seconds = self._elapsed_seconds()
+            dirty.append(FULL_RECT)
+        elif self.screen_name == "drawing" and self.modal is None:
+            for rectangle in self._drawing_dirty_rectangles:
+                grid_x = self.camera[0] + (rectangle.x - self._drawing_geometry()[2]) // CELL
+                grid_y = self.camera[1] + (rectangle.y - self._drawing_geometry()[3]) // CELL
+                refreshed = self._draw_drawing_cell(grid_x, grid_y)
+                if refreshed is not None and refreshed not in dirty:
+                    dirty.append(refreshed)
+            self._drawing_dirty_rectangles = []
+            if self._drawing_hud_dirty or self._elapsed_seconds() != self._last_drawn_elapsed_seconds:
+                self._drawing_hud(small, restore_background=True)
+                self._drawing_hud_dirty = False
+                self._last_drawn_elapsed_seconds = self._elapsed_seconds()
+                dirty.append(DRAWING_HUD_RECT)
+        if self.show_performance_hud:
+            dirty.append(self._performance_hud(small))
+        return dirty
 
     def _result(self, font, small):
         page = self.page
@@ -324,7 +409,7 @@ class App:
         self.screen.blit(yes, (buttons_x, buttons_y))
         self.screen.blit(no, (buttons_x + yes.get_width() + gap, buttons_y))
 
-    def _performance_hud(self, font: pygame.font.Font) -> None:
+    def _performance_hud(self, font: pygame.font.Font) -> pygame.Rect:
         """Draw the previous frame's timings without affecting game state."""
         timing = self.performance.latest
         lines = (
@@ -341,6 +426,7 @@ class App:
         for image in images:
             self.screen.blit(image, (rect.x + 4, y))
             y += image.get_height()
+        return rect
 
     def _write_performance_report(self) -> None:
         report = self.performance.report() + (
@@ -393,20 +479,20 @@ class App:
                             if joystick: joystick.handle_event(event)
                             actions.extend(actions_from_event(event))
                     for action in actions:
-                        if isinstance(action,Action): self.handle(action)
+                        if isinstance(action,Action): self._track_action_redraw(action)
                     input_finished = time.perf_counter()
-                    self.draw(font,small)
-                    if self.show_performance_hud:
-                        self._performance_hud(small)
+                    dirty_rectangles = self._draw_pending(font, small)
                     render_finished = time.perf_counter()
-                    display.present()
+                    if dirty_rectangles:
+                        display.present(dirty_rectangles)
                     present_finished = time.perf_counter()
-                    self.presentation_frames += 1
-                    self.last_scale_ms = display.last_scale_ms
-                    self.total_scale_ms += display.last_scale_ms
-                    self.max_scale_ms = max(self.max_scale_ms, display.last_scale_ms)
-                    self.total_backend_present_ms += display.last_backend_present_ms
-                    self.max_backend_present_ms = max(self.max_backend_present_ms, display.last_backend_present_ms)
+                    if dirty_rectangles:
+                        self.presentation_frames += 1
+                        self.last_scale_ms = display.last_scale_ms
+                        self.total_scale_ms += display.last_scale_ms
+                        self.max_scale_ms = max(self.max_scale_ms, display.last_scale_ms)
+                        self.total_backend_present_ms += display.last_backend_present_ms
+                        self.max_backend_present_ms = max(self.max_backend_present_ms, display.last_backend_present_ms)
                     clock.tick(FPS)
                     frame_finished = time.perf_counter()
                     self.performance.record(FrameTiming(

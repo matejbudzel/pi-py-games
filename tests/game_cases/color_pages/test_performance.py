@@ -7,10 +7,15 @@ import pygame
 
 from common.input import Action
 from common.performance import FrameTiming
+from games.color_pages.art import Page
 from games.color_pages.main import App
 
 
 class PixelColorsPerformanceTests(unittest.TestCase):
+    @staticmethod
+    def _page() -> Page:
+        return Page("test", Path("test.png"), "test", 16, ((255, 0, 0),), tuple((0,) * 16 for _ in range(16)))
+
     def test_f8_action_toggles_the_developer_performance_hud(self) -> None:
         app = App()
 
@@ -48,3 +53,26 @@ class PixelColorsPerformanceTests(unittest.TestCase):
         app._performance_hud(pygame.font.Font(None, 16))
 
         self.assertEqual(app.last_scale_ms, 3.0)
+
+    def test_normal_drawing_move_marks_only_the_old_and_new_cells_and_hud(self) -> None:
+        app = App()
+        app.pages = (self._page(),)
+        app.screen_name = "drawing"
+        app._needs_full_redraw = False
+
+        app._track_action_redraw(Action.RIGHT)
+
+        self.assertFalse(app._needs_full_redraw)
+        self.assertEqual(len(app._drawing_dirty_rectangles), 2)
+        self.assertTrue(app._drawing_hud_dirty)
+
+    def test_modal_state_change_requires_a_single_full_redraw(self) -> None:
+        app = App()
+        app.pages = (self._page(),)
+        app.screen_name = "drawing"
+        app._needs_full_redraw = False
+
+        app._track_action_redraw(Action.START)
+
+        self.assertTrue(app._needs_full_redraw)
+        self.assertEqual(app.modal_kind, "clear")
