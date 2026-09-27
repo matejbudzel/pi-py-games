@@ -18,7 +18,7 @@ class Page:
     signature: str
     size: int
     palette: tuple[Color, ...]
-    pixels: tuple[tuple[int, ...], ...]  # -1 is transparent / always-black background.
+    pixels: tuple[tuple[int, ...], ...]  # -1 is transparent / light art background.
 
     @property
     def color_count(self) -> int:

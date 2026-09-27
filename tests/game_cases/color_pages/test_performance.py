@@ -8,7 +8,7 @@ import pygame
 from common.input import Action
 from common.performance import FrameTiming
 from games.color_pages.art import Page
-from games.color_pages.main import App
+from games.color_pages.main import ART_BACKGROUND, App
 
 
 class PixelColorsPerformanceTests(unittest.TestCase):
@@ -76,3 +76,15 @@ class PixelColorsPerformanceTests(unittest.TestCase):
 
         self.assertTrue(app._needs_full_redraw)
         self.assertEqual(app.modal_kind, "clear")
+
+    def test_transparent_art_pixels_use_the_light_art_background(self) -> None:
+        page = Page("test", Path("test.png"), "test", 16, ((255, 0, 0),), ((-1,) + (0,) * 15,) * 16)
+        app = App()
+        app.pages = (page,)
+        app.screen = pygame.Surface((427, 240))
+
+        preview = app._page_surface(page)
+        rectangle = app._draw_drawing_cell(0, 0)
+
+        self.assertEqual(preview.get_at((0, 0))[:3], ART_BACKGROUND)
+        self.assertEqual(app.screen.get_at(rectangle.center)[:3], ART_BACKGROUND)

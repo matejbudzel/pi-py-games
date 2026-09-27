@@ -23,6 +23,7 @@ from .progress import ProgressStore
 WIDTH, HEIGHT, FPS = 427, 240, 30
 OUTPUT_SIZE = (854, 480)
 BG, INK, WHITE, GREY = (31, 35, 55), (12, 15, 25), (247, 245, 235), (126, 132, 146)
+ART_BACKGROUND = (226, 229, 235)
 # 16 cells at this pitch occupy 352 of the 363px drawing viewport.  The
 # remaining space avoids clipping while each logical image pixel stays large.
 CELL, HUD_W = 22, 64
@@ -252,7 +253,7 @@ class App:
     def _page_surface(self, page: Page, colored: set[tuple[int, int]] | None = None) -> pygame.Surface:
         """Build one native-resolution page; scaling the whole image avoids seams."""
         surface = pygame.Surface((page.size, page.size))
-        surface.fill(INK)
+        surface.fill(ART_BACKGROUND)
         for y, row in enumerate(page.pixels):
             for x, value in enumerate(row):
                 if value >= 0:
@@ -297,9 +298,11 @@ class App:
         if rectangle is None:
             return None
         value = self.page.pixels[y][x]
-        color = INK if value < 0 else (self.page.palette[value] if (x, y) in self.colored else GREY)
-        pygame.draw.rect(self.screen, INK, rectangle)
-        if value >= 0:
+        if value < 0:
+            pygame.draw.rect(self.screen, ART_BACKGROUND, rectangle)
+        else:
+            color = self.page.palette[value] if (x, y) in self.colored else GREY
+            pygame.draw.rect(self.screen, INK, rectangle)
             pygame.draw.rect(self.screen, color, rectangle.inflate(-2, -2))
         if value == self.current_color and (x, y) not in self.colored:
             pygame.draw.circle(self.screen, WHITE, rectangle.center, 3)
