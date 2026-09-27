@@ -228,9 +228,12 @@ class App:
         self._text(large, "KONIEC HRY", (WIDTH // 2, 48), GOLD, center=True)
         if self.new_high_score: self._text(font, self.settings.new_high_score_text, (WIDTH // 2, 78), (104, 221, 133), center=True)
         values = (("SKÓRE", self.game.score), ("RIADKY", self.game.lines), ("ÚROVEŇ", self.game.level), ("REKORD", self.high_scores.high_score))
+        # Center the stats block between the heading and the two action labels.
+        # A new-record message occupies part of that space when present.
+        grid_top = 96 if self.new_high_score else 90
         for index, (label, value) in enumerate(values):
             # Two columns, centered together rather than anchored to the left.
-            x = WIDTH // 2 + (-75 if index % 2 == 0 else 75); y = 108 + (index // 2) * 48
+            x = WIDTH // 2 + (-75 if index % 2 == 0 else 75); y = grid_top + (index // 2) * 48
             self._text(font, label, (x, y), MUTED, center=True)
             self._text(large, str(value), (x, y + 22), WHITE, center=True)
         self._text(font, "ŠTART -> NOVÁ HRA", (WIDTH // 2, 203), GOLD, center=True)
