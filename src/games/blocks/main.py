@@ -83,7 +83,13 @@ class App:
 
     def _close_modal(self) -> None:
         """Restore every pixel hidden by a modal shade or its border."""
+        modal_kind = self.modal
         self.modal = None
+        if modal_kind == "leave" and self.screen_name == "game":
+            # Countdown time is not spent while deciding whether to leave.
+            # Returning from this modal should feel like resuming a pause.
+            self.paused = False
+            self._begin_countdown()
         self.dirty = True
 
     def handle(self, action: Action, *, can_hold: bool = True) -> None:
@@ -99,8 +105,11 @@ class App:
             elif action is Action.START:
                 accept = self.modal_yes
                 if accept:
+                    self.modal = None
                     self.running = False
-                self._close_modal()
+                    self.dirty = True
+                else:
+                    self._close_modal()
             return
         if self.screen_name == "splash":
             if action is Action.START: self.start_game()

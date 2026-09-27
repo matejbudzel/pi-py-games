@@ -1,5 +1,6 @@
 import random
 from dataclasses import replace
+import time
 
 from games.blocks.core import BOARD_HEIGHT, BOARD_WIDTH, Game, Piece
 from games.blocks.progress import HighScoreStore
@@ -117,3 +118,13 @@ def test_dismissing_a_modal_requests_a_full_scene_restore(tmp_path):
     app._open_modal("leave")
     app.handle(Action.SELECT)
     assert app.modal is None and app.dirty
+
+
+def test_dismissing_leave_during_countdown_restarts_countdown(tmp_path):
+    app = App(replace(load_settings(), high_score_path=tmp_path / "scores.json"))
+    app.start_game()
+    app.handle(Action.SELECT)
+    assert app.modal == "leave"
+    app.handle(Action.SELECT)
+    assert app.modal is None
+    assert app._countdown_value(time.monotonic()) == app.settings.countdown_seconds
