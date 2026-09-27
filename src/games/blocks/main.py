@@ -245,7 +245,9 @@ class App:
         platform = display_settings(); initialize_pygame(platform)
         if platform.backend == "pygame": pygame.display.set_caption(self.settings.title)
         display = GameDisplay(platform, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT)); self.screen = display.canvas
-        font, large = pygame.font.Font(SWEET16_FONT_PATH, 12), pygame.font.Font(SWEET16_FONT_PATH, 18)
+        # All type is deliberately sized on the 427×240 logical canvas: a
+        # legible 16px base and 24px for score/result emphasis.
+        font, large = pygame.font.Font(SWEET16_FONT_PATH, 16), pygame.font.Font(SWEET16_FONT_PATH, 24)
         joystick = JoystickInput() if platform.backend == "pygame" else None; console = ConsoleInput() if platform.backend == "fbdev" else None; clock = pygame.time.Clock()
         try:
             with console or _NullContext():
