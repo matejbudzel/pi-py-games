@@ -2,168 +2,95 @@
 
 ## Product goal
 
-Build the smallest useful kid-friendly DDR-style game that can validate whether the dance pad is fun enough to justify further work.
-
-Prefer a working, understandable MVP over completeness or abstraction.
+Build small, kid-friendly, dance-pad-first Pygame games that are pleasant to
+play on the Raspberry Pi 1 B+. Prefer a working, understandable MVP over
+completeness or abstraction. Game-specific product rules belong in that game's
+package, for example `src/games/dance/AGENTS.md`.
 
 ## Repository workflow
 
 This is a single-developer repository.
 
-- Agents may commit coherent completed changes directly to `main` and push them without opening a pull request.
-- Keep commits focused and understandable; do not mix unrelated cleanup into feature work.
-- Before pushing, run the relevant tests/lint/smoke checks that are practical on the development host.
-- Do not rewrite published history or force-push `main` unless explicitly requested.
-- If a change is intentionally incomplete or known to break an existing entry point, do not push it merely to checkpoint work.
+- Keep commits focused and understandable; do not mix unrelated cleanup into a
+  feature change.
+- For a coherent completed change, run practical relevant tests, commit it to
+  `main`, and push it. Do not rewrite published history or force-push `main`
+  unless explicitly requested.
+- Deploy completed game changes to `pi286` by fast-forwarding
+  `/home/dietpi/pi-py-games` with `git pull --ff-only`, then run a safe,
+  targeted smoke check when practical. Preserve device-local changes and never
+  restart or launch an active game without the user's approval.
+- The Pi is an optional target check, not the normal development loop. Do not
+  make progress depend on it or change unrelated device configuration.
+- Register a runnable game intended for `pi-games-launcher` in
+  `src/pi_py_games/provider.py`; never register a missing or broken entry
+  point.
 
-For optional target-device smoke testing, agents may try `ssh pi286`. The expected repository clone on that device is:
+## Platform and shared code
 
-`/home/dietpi/pi-py-games`
+- Primary target: Raspberry Pi 1 B+ with 256 MB RAM. Develop normally on
+  desktop macOS or Linux.
+- Use Python and Pygame. Reuse `src/common/` rather than creating per-game
+  variants of input, framebuffer, logging, or performance code.
+- Use `display_settings`, `initialize_pygame`, and `GameDisplay` for display
+  ownership. fbdev games use `ConsoleInput`; desktop games use Pygame events
+  and `JoystickInput`.
+- Keep platform-specific display, joystick, audio-latency, and framebuffer
+  details out of core game logic.
+- The sibling `pi-games-launcher` repository is the authoritative operational
+  reference for the Pi/DietPi hardware and guest-process lifecycle.
 
-If the device is reachable, a normal deployment check may pull the current `main` in that clone and run safe, non-destructive smoke tests. Do not make availability of the Pi a prerequisite for normal development, and do not change unrelated device configuration during a game deployment check.
+## Display and performance
 
-Games intended for the external `pi-games-launcher` must be registered through `src/pi_py_games/provider.py` once their entry point is runnable. Do not expose a provider manifest entry that points to a missing/broken module.
+- New pixel-art games default to a 427×240 logical canvas presented as an
+  854×480 output canvas through `GameDisplay(..., logical_size=(427, 240))`.
+  Use integer nearest-neighbour scaling. A native 854×480 canvas is an explicit
+  exception for a game that genuinely needs it.
+- At 1280×720, center the 854×480 output 1:1 with borders; do not add a second
+  responsive layout.
+- Target 30 FPS on the Pi. Preload assets; avoid runtime decoding, per-frame
+  filesystem access, unnecessary full-screen alpha work, and expensive pixel
+  pipelines.
+- Static screens must not redraw or present every frame. Track logical dirty
+  rectangles and call `display.present(rectangles)` so scaling and fbdev copies
+  affect only changed areas. Use one full redraw for transitions, scrolling, or
+  other changes that invalidate a cached scene.
+- Every new game exposes the F8 developer performance overlay using
+  `common.performance.PerformanceTracker`. It shows FPS/frame cost and the
+  relevant render/scale/present timings, and writes a report on normal exit
+  beside `PI_PY_GAMES_ERROR_LOG`.
 
-## Platform contract
+## Input and interaction
 
-- Primary deployment target: Raspberry Pi 1 B+ with 256 MB RAM.
-- Primary development surface: desktop macOS and Linux.
-- Python + Pygame is the default implementation stack.
-- Do not make the Raspberry Pi the normal development loop.
-- Do not introduce Raspberry-Pi-specific architecture unless profiling on the real device demonstrates a need.
-- Keep platform-specific display, joystick and latency configuration isolated from core game logic.
+Keyboard input is a first-class controller. Translate raw device events to
+`common.input.Action` before game-state handling; never make game state depend
+on raw Pygame keys or joystick events.
 
-The sibling `pi-games-launcher` repository is the authoritative operational reference for the target Pi/DietPi hardware, display setup, and guest-process ownership. Reuse its hardware knowledge where appropriate, but do not take ownership of launcher hardware lifecycle.
+- Arrow keys map to LEFT/RIGHT/UP/DOWN.
+- Enter and Space map to START.
+- Escape and F1 map to SELECT.
+- Dance-pad input and keyboard input use the same action model.
+- SELECT opens a localized confirmation before a destructive or leave action.
+  Its default focus is cancel; START confirms and SELECT cancels.
 
-## Input contract
+## UI, language, and configuration
 
-Keyboard input is a first-class controller, not a fallback.
+- Keep normal player UI text-light. Prefer icons, highlighting, colors, and
+  simple symbols over instructions or technical labels.
+- Slovak is the default language for player-facing UI. Source code, comments,
+  identifiers, tests, commits, and documentation are English.
+- Player-facing strings, external-content paths, and game tuning live in a
+  game-specific INI file at `config/<game>.ini`. Keep an English-named template
+  next to the game as `src/games/<game>/config.example.ini`; local `config/`
+  files are device/user state and must stay out of Git.
+- The result/end state remains until a player action unless the game-specific
+  contract explicitly says otherwise.
 
-Every MVP action must work both from the keyboard and from the dance pad through a shared action model.
+## Testing, content, and scope
 
-Canonical actions:
-
-- LEFT
-- RIGHT
-- UP
-- DOWN
-- START
-- SELECT
-
-Default keyboard mapping:
-
-- Arrow keys -> directions
-- Enter or Space -> START
-- Escape -> SELECT
-
-Do not let game states depend directly on raw Pygame key or joystick events. Translate device input into game actions first.
-
-## UI contract
-
-The MVP is intentionally text-light.
-
-Normal player-facing text should be limited to:
-
-- the game title on the splash screen
-- song titles in the song-selection screen
-
-Do not add explanatory labels such as `START`, `SELECT`, `PAUSED`, `GREAT`, `MISS`, `SONG COMPLETE`, percentages or control instructions unless explicitly requested later.
-
-Prefer icons, highlights, progress bars and simple symbols over written explanations.
-
-### Song selection
-
-- Song titles are left-aligned.
-- All song titles begin on the same fixed x coordinate.
-- The current selection is shown with a chevron in a separate fixed column to the left of the song titles.
-- Up/Down moves the chevron vertically along a single x axis.
-- Do not horizontally shift the chevron or song titles based on title length.
-
-### Step judgement feedback
-
-Each judged note must produce immediate non-textual feedback using one of three reaction images:
-
-- heart -> best / very good hit
-- thumbs-up -> acceptable hit
-- shrug -> miss / poor hit
-
-These icons are the normal in-game judgement feedback. Do not duplicate them with textual judgement labels.
-
-Keep the implementation simple: preload the assets and briefly show the latest judgement before it disappears or is replaced by the next one.
-
-### Result screen
-
-- Show a simple final 1-5 star result.
-- Celebrate song completion regardless of performance.
-- Do not show a fail state.
-- Do not auto-dismiss the result screen.
-- The result remains visible indefinitely until the player explicitly presses START or SELECT.
-- START and SELECT both return to the song list in the MVP.
-
-## Display contract
-
-- Application canvas: 854x480.
-- Menus, HUD, text and results render natively at 854x480.
-- Gameplay art may render to a lower-resolution logical surface and scale up using integer nearest-neighbour scaling.
-- Do not force UI text through the low-resolution gameplay surface.
-- 1280x720 output should center the 854x480 application canvas 1:1 with borders rather than introduce a second responsive layout.
-
-## Performance approach
-
-Target smooth 30 FPS on Raspberry Pi 1 B+.
-
-Prefer simple portable code first. Do not pre-emptively add custom framebuffer code, C extensions, NumPy pixel pipelines, custom audio threads or similar complexity.
-
-Avoid obviously expensive runtime work:
-
-- no per-frame filesystem access
-- no runtime image decoding during songs
-- no unnecessary full-screen alpha effects
-- preload small assets
-- keep gameplay sprites simple
-
-Profile on the actual Pi before optimizing further.
-
-## Timing contract
-
-Audio playback is the authoritative song clock. Never derive note timing from frame count.
-
-Charts should be parsed into a format independent of StepMania source syntax, ideally absolute note timestamps plus direction/type.
-
-Support configurable timing offsets for real-device calibration.
-
-## Song content
-
-Do not commit copyrighted audio or downloaded community charts.
-
-Songs live in an external configurable directory as metadata + WAV + chart bundles.
-
-The repository may contain synthetic/example metadata and charts only when they are safe to redistribute.
-
-## Scope discipline
-
-Do not implement these unless the current task explicitly requires them:
-
-- persistent high scores
-- accounts/profiles
-- multiplayer
-- combo systems
-- fail/life mechanics
-- online services
-- cover art/video backgrounds
-- lyrics
-- MP3 decoding
-- chart editor
-- auto-chart generation
-- exhaustive StepMania compatibility
-- settings UI
-- text-heavy tutorial or judgement UI
-
-When integrating community charts, support the smallest useful subset of the format that handles the selected Beginner/Easy songs.
-
-## Code style
-
-- Keep modules small and responsibilities obvious.
-- Prefer plain functions/dataclasses and simple state objects over framework-heavy patterns.
-- Keep game logic testable without a physical dance pad or Raspberry Pi.
-- Comments in source code should be in English.
+- Keep modules small and game logic testable without a Pi or dance pad. Add
+  focused tests for new state transitions and performance-sensitive rendering.
+- Do not commit copyrighted audio, downloaded charts, or other unlicensed game
+  content. External content paths belong in local configuration.
+- Do not add accounts, online services, persistent scores, multiplayer, a
+  settings UI, or text-heavy tutorials unless a task explicitly requires them.
