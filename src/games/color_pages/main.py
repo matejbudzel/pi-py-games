@@ -249,6 +249,11 @@ class App:
             image = pygame.transform.scale(self.preview_surfaces[page], rect.size)
             self.scaled_pages[key] = image
         self.screen.blit(image, rect)
+        self._frame_art(rect)
+
+    def _frame_art(self, rectangle: pygame.Rect) -> None:
+        """Separate light artwork from the surrounding UI with a stable frame."""
+        pygame.draw.rect(self.screen, BG, rectangle, 2)
 
     def _page_surface(self, page: Page, colored: set[tuple[int, int]] | None = None) -> pygame.Surface:
         """Build one native-resolution page; scaling the whole image avoids seams."""
@@ -396,6 +401,7 @@ class App:
             self.scaled_pages[image_key] = image
         image_position = (left, (HEIGHT - image_size) // 2)
         self.screen.blit(image, image_position)
+        self._frame_art(pygame.Rect(image_position, image_key[1]))
         values_y = (HEIGHT - len(value_images) * 48) // 2
         values_x = left + image_size + gap
         for index, (icon, text) in enumerate(value_images):
