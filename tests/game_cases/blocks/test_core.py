@@ -7,7 +7,7 @@ from games.blocks.input import actions_from_blocks_event
 from common.input import Action, Release
 import pygame
 from games.blocks.config import load_settings
-from games.blocks.main import App
+from games.blocks.main import App, BOARD_X, BOARD_Y, CELL, PANEL
 
 
 def test_spawn_and_rotation_stay_inside_board():
@@ -92,3 +92,28 @@ def test_piece_and_performance_overlay_use_small_dirty_regions(tmp_path):
     app.handle(Action.DEBUG_TOGGLE_PERFORMANCE)
     overlay = app._draw_pending(font, large)
     assert overlay and all(rect != pygame.Rect(0, 0, 427, 240) for rect in overlay)
+
+
+def test_partial_piece_redraw_erases_cells_left_behind_by_the_falling_piece(tmp_path):
+    app = App(replace(load_settings(), high_score_path=tmp_path / "scores.json"))
+    pygame.font.init()
+    app.screen = pygame.Surface((427, 240))
+    app.canvas = pygame.Surface((427, 240))
+    app.backgrounds = {name: pygame.Surface((427, 240)) for name in ("splash", "game", "result")}
+    font, large = pygame.font.Font(None, 16), pygame.font.Font(None, 24)
+    app.start_game(); app.countdown_until = 0
+    app._draw_pending(font, large)
+    assert app.game is not None
+    before = set(app._piece_positions())
+    app.handle(Action.DOWN)
+    app._draw_pending(font, large)
+    erased_x, erased_y = next(iter(before - set(app._piece_positions())))
+    pixel = app.screen.get_at((BOARD_X + erased_x * CELL + CELL // 2, BOARD_Y + erased_y * CELL + CELL // 2))
+    assert tuple(pixel[:3]) == PANEL
+
+
+def test_dismissing_a_modal_requests_a_full_scene_restore(tmp_path):
+    app = App(replace(load_settings(), high_score_path=tmp_path / "scores.json"))
+    app._open_modal("leave")
+    app.handle(Action.SELECT)
+    assert app.modal is None and app.dirty

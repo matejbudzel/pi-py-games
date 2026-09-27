@@ -81,6 +81,11 @@ class App:
     def _open_modal(self, kind: str) -> None:
         self.modal, self.modal_yes, self.dirty = kind, False, True
 
+    def _close_modal(self) -> None:
+        """Restore every pixel hidden by a modal shade or its border."""
+        self.modal = None
+        self.dirty = True
+
     def handle(self, action: Action, *, can_hold: bool = True) -> None:
         if action is Action.DEBUG_TOGGLE_PERFORMANCE:
             self.show_performance_hud = not self.show_performance_hud
@@ -90,14 +95,12 @@ class App:
                 self.modal_yes = not self.modal_yes
                 self.dirty = True
             elif action is Action.SELECT:
-                self.modal = None
-                self.dirty = True
+                self._close_modal()
             elif action is Action.START:
                 accept = self.modal_yes
-                self.modal = None
                 if accept:
                     self.running = False
-                self.dirty = True
+                self._close_modal()
             return
         if self.screen_name == "splash":
             if action is Action.START: self.start_game()
@@ -282,6 +285,9 @@ class App:
 
     def _draw_cell(self, x: int, y: int, name: str | None) -> None:
         rect = pygame.Rect(BOARD_X + x * CELL, BOARD_Y + y * CELL, CELL, CELL)
+        # Partial redraws must actively erase an old falling-block interior;
+        # a grid outline alone leaves its previous colour behind.
+        pygame.draw.rect(self.screen, PANEL, rect)
         pygame.draw.rect(self.screen, GRID, rect, 1)
         if name:
             pygame.draw.rect(self.screen, COLORS[name], rect.inflate(-2, -2))
