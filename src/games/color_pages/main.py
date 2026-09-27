@@ -1,6 +1,8 @@
 """A compact, controller-first pixel coloring game."""
 from __future__ import annotations
 
+import logging
+import os
 import time
 from pathlib import Path
 import pygame
@@ -11,6 +13,7 @@ from common.display import GameDisplay, display_settings, initialize_pygame
 from common.error_logging import configure_logging
 from common.input import Action, actions_from_event
 from common.joystick_input import JoystickInput
+from common.performance import FrameTiming, PerformanceTracker
 from .config import Settings, load_settings
 from .art import Page, load_pages
 from .progress import ProgressStore
@@ -25,6 +28,7 @@ BG, INK, WHITE, GREY = (31, 35, 55), (12, 15, 25), (247, 245, 235), (126, 132, 1
 CELL, HUD_W = 22, 64
 GRID_COLUMNS = 3
 RAINBOW = ((255, 105, 112), (255, 181, 72), (255, 232, 92), (104, 221, 133), (94, 184, 255), (183, 126, 255))
+PERFORMANCE_REPORT_PATH = Path(os.environ.get("PI_PY_GAMES_ERROR_LOG", "~/.local/state/pi-py-games/errors.log")).expanduser().parent / "pixel-colors-performance.txt"
 
 
 class App:
@@ -41,6 +45,13 @@ class App:
         self.completed = False
         self.camera = [0, 0]
         self.running = True
+        self.show_performance_hud = False
+        self.performance = PerformanceTracker()
+        self.presentation_frames = 0
+        self.total_scale_ms = 0.0
+        self.max_scale_ms = 0.0
+        self.total_backend_present_ms = 0.0
+        self.max_backend_present_ms = 0.0
 
     @property
     def page(self) -> Page: return self.pages[self.selected]
@@ -137,6 +148,9 @@ class App:
             if pos > high: self.camera[axis] = min(max(0, self.page.size - visible), pos - visible + 5)
 
     def handle(self, action: Action) -> None:
+        if action is Action.DEBUG_TOGGLE_PERFORMANCE:
+            self.show_performance_hud = not self.show_performance_hud
+            return
         if self.modal:
             if action in (Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN): self.modal = "yes" if self.modal == "no" else "no"
             elif action is Action.SELECT:
@@ -309,6 +323,38 @@ class App:
         self.screen.blit(yes, (buttons_x, buttons_y))
         self.screen.blit(no, (buttons_x + yes.get_width() + gap, buttons_y))
 
+    def _performance_hud(self, font: pygame.font.Font) -> None:
+        """Draw the previous frame's timings without affecting game state."""
+        timing = self.performance.latest
+        lines = (
+            f"{timing.frames_per_second:4.1f} FPS {timing.frame_ms:5.1f} ms",
+            f"r{timing.render_ms:4.1f} s{self.display.last_scale_ms:4.1f} p{timing.present_ms:4.1f}",
+        )
+        images = [font.render(line, False, (180, 255, 180)) for line in lines]
+        width = max(image.get_width() for image in images) + 8
+        height = sum(image.get_height() for image in images) + 6
+        rect = pygame.Rect(WIDTH - width - 4, HEIGHT - height - 4, width, height)
+        pygame.draw.rect(self.screen, (0, 0, 0), rect)
+        pygame.draw.rect(self.screen, (90, 150, 90), rect, 1)
+        y = rect.y + 3
+        for image in images:
+            self.screen.blit(image, (rect.x + 4, y))
+            y += image.get_height()
+
+    def _write_performance_report(self) -> None:
+        report = self.performance.report() + (
+            f"average_scale_ms={self.total_scale_ms / max(1, self.presentation_frames):.3f}\n"
+            f"maximum_scale_ms={self.max_scale_ms:.3f}\n"
+            f"average_backend_present_ms={self.total_backend_present_ms / max(1, self.presentation_frames):.3f}\n"
+            f"maximum_backend_present_ms={self.max_backend_present_ms:.3f}\n"
+        )
+        try:
+            PERFORMANCE_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+            PERFORMANCE_REPORT_PATH.write_text(report, encoding="utf-8")
+            logging.getLogger(__name__).info("Pixel Colors performance report: %s", PERFORMANCE_REPORT_PATH)
+        except OSError:
+            logging.getLogger(__name__).warning("Could not write Pixel Colors performance report", exc_info=True)
+
     def run(self) -> None:
         settings=display_settings(); initialize_pygame(settings)
         if settings.backend == "pygame": pygame.display.set_caption(self.settings.title)
@@ -337,6 +383,7 @@ class App:
         try:
             with console or _NullContext():
                 while self.running:
+                    frame_started = time.perf_counter()
                     actions=[]
                     if console: actions.extend(a for a in console.poll_actions() if isinstance(a,Action))
                     else:
@@ -346,8 +393,31 @@ class App:
                             actions.extend(actions_from_event(event))
                     for action in actions:
                         if isinstance(action,Action): self.handle(action)
-                    self.draw(font,small); display.present(); clock.tick(FPS)
-        finally: display.close(); pygame.quit()
+                    input_finished = time.perf_counter()
+                    self.draw(font,small)
+                    if self.show_performance_hud:
+                        self._performance_hud(small)
+                    render_finished = time.perf_counter()
+                    display.present()
+                    present_finished = time.perf_counter()
+                    self.presentation_frames += 1
+                    self.total_scale_ms += display.last_scale_ms
+                    self.max_scale_ms = max(self.max_scale_ms, display.last_scale_ms)
+                    self.total_backend_present_ms += display.last_backend_present_ms
+                    self.max_backend_present_ms = max(self.max_backend_present_ms, display.last_backend_present_ms)
+                    clock.tick(FPS)
+                    frame_finished = time.perf_counter()
+                    self.performance.record(FrameTiming(
+                        input_ms=(input_finished - frame_started) * 1000,
+                        render_ms=(render_finished - input_finished) * 1000,
+                        present_ms=(present_finished - render_finished) * 1000,
+                        work_ms=(present_finished - frame_started) * 1000,
+                        frame_ms=(frame_finished - frame_started) * 1000,
+                    ))
+        finally:
+            self._write_performance_report()
+            display.close()
+            pygame.quit()
 
 
 class _NullContext:

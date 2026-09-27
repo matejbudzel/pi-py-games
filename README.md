@@ -449,6 +449,13 @@ and presentation (`p`) time in milliseconds. When the application exits, its
 average, maximum, and final frame timing are written to
 `/tmp/last-pi-dance-run.txt`.
 
+Pixel Colors has the same F8 developer overlay. Its first line is frame rate
+and total frame time; its second line shows render (`r`), logical 2× scale
+(`s`), and presentation (`p`) time in milliseconds. On exit, it writes the
+average, maximum, and final timings to `pixel-colors-performance.txt` next to
+the configured `PI_PY_GAMES_ERROR_LOG` (normally
+`~/.local/state/pi-py-games/`).
+
 ### Raspberry Pi display smoke test
 
 Before the first Pi launch, verify that the installed SDL2/Pygame display driver

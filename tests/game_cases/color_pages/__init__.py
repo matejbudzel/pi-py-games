@@ -1,0 +1,1 @@
+"""Pixel Colors game tests."""
