@@ -235,7 +235,7 @@ class App:
             self._text(font, self.settings.new_high_score_text, (WIDTH // 2, grid_top - 26), (104, 221, 133), center=True)
         for index, (label, value) in enumerate(values):
             # Two columns, centered together rather than anchored to the left.
-            x = WIDTH // 2 + (-75 if index % 2 == 0 else 75); y = grid_top + (index // 2) * 48
+            x = WIDTH // 2 + (-48 if index % 2 == 0 else 48); y = grid_top + (index // 2) * 48
             self._text(font, label, (x, y), MUTED, center=True)
             self._text(large, str(value), (x, y + 22), WHITE, center=True)
         self._text(font, "ŠTART -> NOVÁ HRA", (WIDTH // 2, 203), GOLD, center=True)
