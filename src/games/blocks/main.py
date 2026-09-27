@@ -225,12 +225,13 @@ class App:
 
     def _draw_result(self, font, large) -> None:
         assert self.game is not None
-        self._text(large, "KONIEC HRY", (WIDTH // 2, 48), GOLD, center=True)
-        if self.new_high_score: self._text(font, self.settings.new_high_score_text, (WIDTH // 2, 78), (104, 221, 133), center=True)
+        self._text(large, "KONIEC HRY", (WIDTH // 2, 30), GOLD, center=True)
         values = (("SKÓRE", self.game.score), ("RIADKY", self.game.lines), ("ÚROVEŇ", self.game.level), ("REKORD", self.high_scores.high_score))
-        # Center the stats block between the heading and the two action labels.
-        # A new-record message occupies part of that space when present.
-        grid_top = 96 if self.new_high_score else 90
+        # Center the entire stats group between the heading and the action
+        # labels.  A new-record message is its first row, not a loose banner.
+        grid_top = 94 if self.new_high_score else 82
+        if self.new_high_score:
+            self._text(font, self.settings.new_high_score_text, (WIDTH // 2, grid_top - 26), (104, 221, 133), center=True)
         for index, (label, value) in enumerate(values):
             # Two columns, centered together rather than anchored to the left.
             x = WIDTH // 2 + (-75 if index % 2 == 0 else 75); y = grid_top + (index // 2) * 48
