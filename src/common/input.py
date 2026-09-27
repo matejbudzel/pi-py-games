@@ -11,6 +11,8 @@ class Action(Enum):
     RIGHT = auto()
     UP = auto()
     DOWN = auto()
+    LEFT_UP = auto()
+    RIGHT_UP = auto()
     START = auto()
     SELECT = auto()
     DEBUG_RESULT_1 = auto()
@@ -37,6 +39,8 @@ KEY_ACTIONS = {
     pygame.K_RIGHT: Action.RIGHT,
     pygame.K_UP: Action.UP,
     pygame.K_DOWN: Action.DOWN,
+    pygame.K_HOME: Action.LEFT_UP,
+    pygame.K_PAGEUP: Action.RIGHT_UP,
     pygame.K_RETURN: Action.START,
     pygame.K_SPACE: Action.START,
     pygame.K_ESCAPE: Action.SELECT,
@@ -72,7 +76,7 @@ PAD_ACTIONS = {
     3: Action.RIGHT, 5: Action.RIGHT, 7: Action.RIGHT,
     8: Action.START, 9: Action.SELECT,
 }
-DIRECTIONS = {Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN}
+DIRECTIONS = {Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN, Action.LEFT_UP, Action.RIGHT_UP}
 
 
 def actions_from_event(event: pygame.event.Event) -> list[Action | Release]:

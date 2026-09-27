@@ -23,6 +23,7 @@ pi-shadow-run = "games.shadow_run.main:main"
 pi-winter-sports = "games.winter_sports.main:main"
 pi-fb-grid-test = "games.fb_grid_test.main:main"
 pi-pixel-colors = "games.color_pages.main:main"
+pi-blocks = "games.blocks.main:main"
 prepare-shadow-songs = "games.shadow_run.prepare_songs:main"
 pi-py-games = "pi_py_games.provider:main"
 
@@ -34,3 +35,4 @@ where = ["src"]
 "games.shadow_run" = ["assets/*.png", "config.example.ini"]
 "games.color_pages" = ["assets/*.png", "assets/backgrounds/*.png", "assets/pages/*.png", "config.example.ini"]
 "games.winter_sports" = ["config.example.ini"]
+"games.blocks" = ["config.example.ini"]

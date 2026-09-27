@@ -102,6 +102,9 @@ class ConsoleInput:
         # which need multiple simultaneous mat contacts can derive their own
         # broad-lane state without losing one contact to another.
         self.pad_button_events: list[tuple[int, bool]] = []
+        # The decoded action and its originating pad button stay paired for
+        # games which assign a special meaning to an individual panel.
+        self.pad_action_events: list[tuple[Action, int]] = []
         keyboard_actions = self._read_keyboard_actions()
         # Consumers which need hold-like keyboard debug input can distinguish
         # these terminal presses from joystick button events (which follow).
@@ -145,6 +148,7 @@ class ConsoleInput:
                     if value == 1:
                         self._button_events.append(f"button {button} -> {action.name}")
                         self._button_events = self._button_events[-30:]
+                        self.pad_action_events.append((action, button))
                         actions.append(action)
                     elif action in DIRECTIONS:
                         actions.append(Release(action))
