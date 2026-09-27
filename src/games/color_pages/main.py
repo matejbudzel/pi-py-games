@@ -24,6 +24,7 @@ WIDTH, HEIGHT, FPS = 427, 240, 30
 OUTPUT_SIZE = (854, 480)
 BG, INK, WHITE, GREY = (31, 35, 55), (12, 15, 25), (247, 245, 235), (126, 132, 146)
 ART_BACKGROUND = (226, 229, 235)
+ART_FRAME = (205, 211, 222)
 # 16 cells at this pitch occupy 352 of the 363px drawing viewport.  The
 # remaining space avoids clipping while each logical image pixel stays large.
 CELL, HUD_W = 22, 64
@@ -252,8 +253,8 @@ class App:
         self._frame_art(rect)
 
     def _frame_art(self, rectangle: pygame.Rect) -> None:
-        """Separate light artwork from the surrounding UI with a stable frame."""
-        pygame.draw.rect(self.screen, BG, rectangle, 2)
+        """Separate light artwork from its similarly light transparent pixels."""
+        pygame.draw.rect(self.screen, ART_FRAME, rectangle, 2)
 
     def _page_surface(self, page: Page, colored: set[tuple[int, int]] | None = None) -> pygame.Surface:
         """Build one native-resolution page; scaling the whole image avoids seams."""
