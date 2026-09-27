@@ -170,7 +170,8 @@ class App:
         self.screen.blit(image, image.get_rect(center=position) if center else position)
 
     def draw(self, font: pygame.font.Font, large: pygame.font.Font) -> None:
-        self.screen.fill(BACKGROUND)
+        background = {"splash": "splash", "game": "game", "result": "result"}[self.screen_name]
+        self.screen.blit(self.backgrounds[background], (0, 0))
         if self.screen_name == "splash": self._draw_splash(font, large)
         elif self.screen_name == "game": self._draw_game(font, large)
         else: self._draw_result(font, large)
@@ -281,6 +282,10 @@ class App:
         platform = display_settings(); initialize_pygame(platform)
         if platform.backend == "pygame": pygame.display.set_caption(self.settings.title)
         display = GameDisplay(platform, OUTPUT_SIZE, logical_size=(WIDTH, HEIGHT)); self.screen = display.canvas
+        asset_directory = Path(__file__).with_name("assets") / "backgrounds"
+        # Keep these at the logical resolution so no runtime scaling or
+        # decoding work is needed while the game is playing.
+        self.backgrounds = {name: pygame.image.load(asset_directory / f"{name}.png") for name in ("splash", "game", "result")}
         # All type is deliberately sized on the 427×240 logical canvas: a
         # legible 16px base and 24px for score/result emphasis.
         font, large = pygame.font.Font(SWEET16_FONT_PATH, 16), pygame.font.Font(SWEET16_FONT_PATH, 24)
